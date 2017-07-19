@@ -78,6 +78,7 @@ d$avwt <- as.numeric(d$avwt)
 f <- d$SF / d$TF
 plot(d$lon, d$lat, cex=f*3)
 
+# data source:  http://www.somacon.com/p570.php  
 lun <- read.table("moon-phases-1990-2016-America_New_York.csv", header=T, sep=",")
 lun$jln <- julian(lun$month, lun$day, lun$year)
 d$jln <- julian(d$mon, d$day, d$year)
