@@ -20,6 +20,8 @@ xvalid <- function(model, dat, sampleID = c(), kfold = 10, rand=F)  {
 
 if (!"pROC" %in% installed.packages()) install.packages("pROC", repos='http://cran.us.r-project.org')
 library(pROC)
+if (!"AICcmodavg" %in% installed.packages()) install.packages("AICcmodavg", repos='http://cran.us.r-project.org')
+library(AICcmodavg)
 if (!"formula.tools" %in% installed.packages()) install.packages("formula.tools", repos='http://cran.us.r-project.org')
 library(formula.tools)
 

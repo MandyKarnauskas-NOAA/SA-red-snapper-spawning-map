@@ -6,12 +6,12 @@ source("Xvalidate.r")
 
 ##########  libraries  ##############
 #library(arm)
-#library(lme4)
+library(lme4)
 library(maps)
-#library(MASS)
+library(MASS)
 #library(Hmisc) 
 #library(plyr)  
-#library(AICcmodavg)
+
 
 ################################################################################
 dat <- read.table("RedSnapperMatData.csv", sep=",", header=T, na.strings = c("NA"))             # read in data
@@ -81,156 +81,88 @@ dim(d)
 d <- d[which(d$TF>0), ]                                                         # take all samples which have at least 1 female
 dim(d)
 
-
-v <- which(names(d) == "MAXCASPECT") : which(names(d) == "MEANCSLOPE")      # columns for bathymetric variables
-ptab <- matrix(NA, nrow=length(v), ncol=3)
-colnames(ptab) <- c("lessthan0", "zero", "greaterthan0")
-for (i in v)  {                                     # look at distributions of bathymetric variables
-  vr <- d[,i]
-  ptab[i-min(v)-1,1] <- round(length(which(vr<0))/length(vr),2)
-  ptab[i-min(v)-1,2] <- round(length(which(vr==0))/length(vr),2)
-  ptab[i-min(v)-1,3] <- round(length(which(vr>0))/length(vr),2)  }
-cbind(names(d)[v], ptab)  
-  
-#  Worked with binned bathymetric variables.  Using a systematic binning method 
-#  (quantiles) it ultimately led to better statistical support (lower AICs and 
-#  better diagnostics). Also, outputs suggest the relationships are not linear.  
-for (i in v)  {          # bin bathymetric variables 
-  vr <- d[,i]          # negative numbers are a separate bin unless there are fewer than 100 negative obs 
-  table(vr)              # zeros are a separate bin
-  a <- min(vr) *1.01     # positive numbers are binned by quantile (thirds unless highly skewed distribution, then 50% quantile used)
-  b <- max(vr) *1.01
-  lev <- round(quantile(vr[which(vr>0)], probs=seq(0,1,0.5)),5) 
-  if (lev[2] == lev[3]) {   lev <- round(quantile(vr[which(vr>0)], probs=seq(0,1,0.5)),5)  }
-  lev[1] <- 0
-  brks <- c(a, -0.0001, lev)
-  if (length(which(vr<0)) < 10)  {   brks <- c(a, lev)}  
-  if (a==0)  { brks <- c(-0.0001, lev) }
-  lev[which.max(lev)] <- b
-  print(names(d)[i])
-  print(table(cut(d[,i], breaks = brks)))
-  d[,i] <- cut(d[,i], breaks = brks)  }
-
-
+#################  variable to define position across shelf  ###################
+a.x <- max(d$lon)+0.1
+a.y <- min(d$lat)-0.1
+b.x <- d$lon
+b.y <- d$lat
+d$ang <- atan((b.y-a.y)/(b.x-a.x))*180/pi
+cols <- rainbow(100, start=0.1)
+plot(d$lon, d$lat, col=cols[round(d$ang+90)])
+################################################################################
 
 # bin variables as finely as possible while maintaining adequate number of samples per bin
-#  d$Month <- cut(d$Month, breaks=seq(2,10,2))
 
-quantile(d$Latitude, probs=c(0.33, 0.66))
-quantile(d$Samp_Depth)
-quantile(d$Temp, na.rm=T)
-d$lonbins <- cut(d$Longitude, breaks=seq(-81, -75, 2))
-d$latbins <- cut(d$Latitude, breaks=c(27, 31.2, 32.2, 35))      # based on quantiles and also location of Charleston Bump
-d$depbins <- cut(d$Samp_Depth, breaks=c(10, 30, 40, 50, 70))
-d$lunarbins <- cut(d$Lunar2, breaks=seq(-1,1,0.5))
-d$tempbins <- cut(d$Temp, breaks=c(15, 20, 22, 24, 28))
-d$salbins <- cut(d$Sal, breaks=c(33, 34, 35, 36, 37, 40))
+d$angbins <- cut(d$ang, breaks=c(-90, -79, -60, -45, -30, -17, 0))       # -79, 
+map('usa', xlim=c(-82, -75), ylim=c(26, 36))
+points(d$lon, d$lat, col=d$angbins)
+ 
+d$depbins <- cut(d$dep, breaks=c(10, 25, 30, 35, 40, 50, 60, 85))
+d$tempbins <- cut(d$temp, breaks=c(10, 20, 22, 24, 30))
+#d$lunarbins <- cut(d$Lunar2, breaks=seq(-1,1,0.5))
 
-table(d$latbins, useNA="always")
+table(d$angbins, useNA="always")
 table(d$depbins, useNA="always")
 table(d$tempbins, useNA="always")
-table(d$lunarbins, useNA="always")
-table(d$Lunar, useNA="always")
-
-map('usa', fill = 1, interior=F, col = gray(0.95), ylim=c(24,37), xlim=c(-90, -75)); axis(1); axis(2)
-points(d$Lon, d$Lat, pch=19)
-points(-78.8, 31.7, col=2, pch=19)
-abline(h=c(27, 31.2, 32.2, 35), col=3)         # view latitude binning
+table(d$mon, useNA="always")
+#table(d$lunarbins, useNA="always")
+#table(d$Lunar, useNA="always")
 
 windows()
-plotfactors()                   # look at raw percentages by factor
-for (i in v)  { barplot(tapply(d$Females/d$allF, d[i], mean, na.rm=T), main=names(d)[i]) }
+barplot(table(d$angbins, useNA="always"))
+barplot(table(d$depbins, useNA="always"))
+barplot(table(d$tempbins, useNA="always"))
+barplot(table(d$mon, useNA="always"))
 
-table(d$latbins, d$Month)
-table(d$latbins, d$depbins)
-table(d$latbins, d$tempbins)
+barplot(tapply(d$SF/d$TF, d$angbins, mean, na.rm=T))
+barplot(tapply(d$SF/d$TF, d$depbins, mean, na.rm=T))
+barplot(tapply(d$SF/d$TF, d$tempbins, mean, na.rm=T))
+barplot(tapply(d$SF/d$TF, d$mon, mean, na.rm=T))
+
+table(d$angbins, d$mon)
+table(d$angbins, d$depbins)
+table(d$angbins, d$tempbins)
 table(d$depbins, d$tempbins)
                   
-round(tapply(d$Females/d$allF, list(d$latbins, d$tempbins), mean, na.rm=T), 3)  # temperature * latitude interaction would be nice, but not enough data
-round(tapply(d$Females/d$allF, list(d$latbins, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction possible!
-barplot(tapply(d$Females/d$allF, list(d$latbins, d$tempbins), mean, na.rm=T), beside=T)
-barplot(tapply(d$Females/d$allF, list(d$depbins, d$latbins), mean, na.rm=T), beside=T)
+round(tapply(d$SF/d$TF, list(d$angbins, d$tempbins), mean, na.rm=T), 3)  # temperature * latitude interaction would be nice, but not enough data
+round(tapply(d$SF/d$TF, list(d$angbins, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction possible!
+barplot(tapply(d$SF/d$TF, list(d$angbins, d$tempbins), mean, na.rm=T), beside=T, col=1:6)
+barplot(tapply(d$SF/d$TF, list(d$angbins, d$depbins), mean, na.rm=T), beside=T, col=1:6)
 
-tapply(d$Females/d$allF, d$Year, mean, na.rm=T)
+tapply(d$SF/d$TF, d$year, mean, na.rm=T)
                
 # Month and temp are highly correlated - can't use both
 # no interaction factors because would have to exclude data where highest spawning F encounter rates occur
   
-# yrs0 <- as.numeric(names(which(tapply(d$Females/d$allF, d$Year, mean, na.rm=T)>0)))   # need to take out 1999
-# d <- d[which(d$Year %in% yrs0),]; dim(d)   
+yrs0 <- as.numeric(names(which(tapply(d$SF/d$TF, d$year, mean, na.rm=T)>0)))   # need to take out 1999
+dim(d)
+d <- d[which(d$year %in% yrs0),]; dim(d)   
   
 # fixed effects model
-outfixed <- glm(cbind(Females, NSFemales)  ~ lunarbins + latbins + depbins + tempbins + Year,  family="binomial", data=d)
-summary(outfixed)  
+outfixed <- glm(cbind(SF, NF) ~ depbins + angbins + mon + tempbins + year,  family="binomial", data=d)
+summary(outfixed) 
+stepAIC(outfixed) 
 
 # mixed effects model - year as random effect
-outrand <- glmer(cbind(Females, NSFemales) ~ lunarbins + latbins + depbins + tempbins + (1|Year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+outrand <- glmer(cbind(SF, NF) ~ depbins + angbins + mon + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
 summary(outrand)                  
 extractAIC(outrand) 
 
-v <- which(names(d) == "MAXCASPECT") : which(names(d) == "MEANCSLOPE")
-addn <- data.frame(matrix(NA, nrow=length(v), ncol=3))
-# determine which bathymetric variable has best AIC support. 
-# Can use random effects model by changing out commented lines.  Loop takes much longer and gives similar result. 
-for (i in v)  {
-     d$nvar <- d[,i]
-      out1 <- glmer(cbind(Females, NSFemales) ~ lunarbins + latbins + depbins + tempbins + (1|Year) + nvar, family="binomial", data=d, na.action=na.omit, control=glmerControl(optimizer="bobyqa"))
-#      out1 <- glm(cbind(Females, NSFemales) ~ Lunar + latbins + depbins + tempbins + Year + nvar, family="binomial", data=d)
-      addn[(i- v[1]+1),1] <- names(d[i]) 
-      addn[(i- v[1]+1),2] <- extractAIC(out1)[2]         }
-  names(addn) <- c("variable", "model AIC", "deltaAIC")
-  addn$deltaAIC <- addn$model - extractAIC(outrand)[2]   
-#  addn$deltaAIC <- addn$model - extractAIC(outfixed)[2]       # calculate difference in AIC with bathymetric variable included 
-  addn      
-  addn[order(addn$deltaAIC),]
-  
-########  final random effects model specified here -- check carefully  ########
-outfrand <- glmer(cbind(Females, NSFemales) ~ lunarbins + latbins + depbins + tempbins + (1|Year) + MEANCBSBPI, family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
-summary(outfrand)
+outfrand <- glmer(cbind(SF, NF) ~ depbins + angbins + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(outfrand)                  
+extractAIC(outfrand) 
+
 ################################################################################
 
-outnull <- glm(cbind(Females, NSFemales) ~ 1, family=binomial(logit), data=d)
+outnull <- glm(cbind(SF, NF) ~ 1, family=binomial(logit), data=d)
 (deviance(outnull)-deviance(outfrand))/deviance(outnull)      # deviance explained by all factors combined
 
-outnorand <- glmer(cbind(Females, NSFemales) ~ 1 + (1|Year), family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
+outnorand <- glmer(cbind(SF, NF) ~ 1 + (1|year), family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
 (deviance(outnorand)-deviance(outfrand))/deviance(outnorand)  # deviance explained by fixed factors combined
-
-outnobath <- glmer(cbind(Females, NSFemales) ~ lunarbins + latbins + depbins + tempbins + (1|Year), family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
-bathdev <- (deviance(outnobath)-deviance(outfrand))/deviance(outnobath); bathdev  # deviance explained by bathymetric variable
-
-############################   RANDOM DATA TEST  ###############################
-#######   this takes a really long time 
-#######   for initial exploration, can convert to fixed factors which is much faster
-reps <- 10
-permtest <- rep(NA, reps)                                              # set up vector to contain results
-for (k in 1:reps)  {                                                   # repeats over defined loop
-  drand <- d;  addn$rand_AIC <- NA; addn$rand_deltaAIC <- NA           # clear random data simulation storage structures
-    for (i in v)  {                                                    # loop through bathymetric variables
-      drand[,i] <- sample(d[,i], nrow(d), replace=FALSE)               # resample each bathymetric variable
-      drand$nvar <- drand[,i]                                          # assign to name "nvar" and fit in random effects model
-        out2 <- glmer(cbind(Females, NSFemales) ~ lunarbins + latbins + depbins + tempbins + (1|Year) + nvar, family="binomial", data=drand, na.action=na.omit, control=glmerControl(optimizer="bobyqa",  tol = 1e-1))
-        addn$rand_AIC[(i-v[1]+1)] <- extractAIC(out2)[2]       }       # grab AIC from each random variable model
-  addn$rand_deltaAIC <- addn$rand_AIC - extractAIC(outrand)[2]         # calculate difference in AIC with random bathymetric variable included 
-  drand$nvar <- drand[,which.min(addn$rand_deltaAIC) + v[1]-1]         # find random variable of the group which minimized AIC, then refit model with that variable  
-  outr <- glmer(cbind(Females, NSFemales) ~ lunarbins + latbins + depbins + tempbins + (1|Year) + nvar, family="binomial", data=drand, na.action=na.omit, control=glmerControl(optimizer="bobyqa"))
-  permtest[k] <- (deviance(outnobath)-deviance(outr))/deviance(outnobath)   
-  cat(k)   }
-  
-  hist(permtest); abline(v=bathdev, col=2)
-  abline(v=quantile(permtest, probs=c(0.95)), col=3)
-  quantile(permtest, probs=seq(0,1,0.01)) 
-  summary(permtest > bathdev)
-
-#save("permtest", file="random_test_results.RData")  
-
-cat("% of time that random data explain more deviance than actual data: ", length(which(permtest > bathdev))/(length(permtest))*100, "%\n")    # deviance explained
-#  % of time that random data explain more deviance than actual data: 30 %
 
 ############################   CROSS-VALIDATION  ###############################
 
-d1 <- d[which(!is.na(d$Temp)),]
-outfrand2 <- glmer(cbind(Females, NSFemales) ~ lunarbins + latbins + depbins + tempbins + (1|Year) + MEANCBSBPI, data=d1, family=binomial(logit), control=glmerControl(optimizer="bobyqa"))
-x <- xvalid(outfrand2, d1, rand=T, kfold=5)
+x <- xvalid(outfrand, d, rand=T, kfold=5)
 colMeans(x)
 #                                                                               Area.Under.Curve    False.Positive.Rate False.Negative.Rate 
 #  lunarbins + latbins + depbins + tempbins + (1|Year) + MEANCBSBPI             0.8093112           0.3347222           0.4834233
@@ -250,7 +182,7 @@ save("outfrand", "d", file="final_RS_model.RData")
 
 windows()
 par(mar=c(10,1,1,1), mfrow=c(3,2))
-barplot(summary(outfrand)$coefficients[grep('lat', rownames(summary(outfrand)$coefficients)),1], las=2)
+barplot(summary(outfrand)$coefficients[grep('ang', rownames(summary(outfrand)$coefficients)),1], las=2)
 barplot(summary(outfrand)$coefficients[grep('dep', rownames(summary(outfrand)$coefficients)),1], las=2)
 barplot(summary(outfrand)$coefficients[grep('lun', rownames(summary(outfrand)$coefficients)),1], las=2)
 barplot(summary(outfrand)$coefficients[grep('temp', rownames(summary(outfrand)$coefficients)),1], las=2)
