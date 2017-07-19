@@ -5,13 +5,18 @@ setwd("C:/Users/mkarnauskas/Desktop/RSmap_SA")
 source("Xvalidate.r")
 
 ##########  libraries  ##############
-#library(arm)
+
+if (!"chron" %in% installed.packages()) install.packages("chron", repos='http://cran.us.r-project.org')
+if (!"lme4" %in% installed.packages()) install.packages("lme4", repos='http://cran.us.r-project.org')
+if (!"maps" %in% installed.packages()) install.packages("maps", repos='http://cran.us.r-project.org')
+if (!"MASS" %in% installed.packages()) install.packages("MASS", repos='http://cran.us.r-project.org')
+library(chron)
 library(lme4)
 library(maps)
 library(MASS)
 #library(Hmisc) 
 #library(plyr)  
-
+#library(arm)
 
 ################################################################################
 dat <- read.table("RedSnapperMatData.csv", sep=",", header=T, na.strings = c("NA"))             # read in data
@@ -60,9 +65,9 @@ d$temp <- tapply(dat$Temp, dat$PCG, mean)
 d$avTL <- tapply(dat$TL, dat$PCG, mean)
 d$avwt <- tapply(dat$WholeWt, dat$PCG, mean)
  
-d$day <- as.factor(d$day) 
-d$mon <- as.factor(d$mon) 
-d$year <- as.factor(d$year) 
+d$day <- as.numeric(d$day) 
+d$mon <- as.numeric(d$mon) 
+d$year <- as.numeric(d$year) 
 d$lat <- as.numeric(d$lat)
 d$lon <- as.numeric(d$lon)
 d$dep <- as.numeric(d$dep)
@@ -73,9 +78,11 @@ d$avwt <- as.numeric(d$avwt)
 f <- d$SF / d$TF
 plot(d$lon, d$lat, cex=f*3)
 
-#dat$Lunar3 <- ifelse(dat$Lunar3==-1,1,dat$Lunar3)     #-1 and 1 are both Full Moon
-#dat$Lunar2 <- ifelse(dat$Lunar2==-1,1,dat$Lunar2)     #-1 and 1 are both Full Moon                                  
-#dat$Lunar <- as.factor(dat$Lunar3)
+lun <- read.table("moon-phases-1990-2016-America_New_York.csv", header=T, sep=",")
+lun$jln <- julian(lun$month, lun$day, lun$year)
+d$jln <- julian(d$mon, d$day, d$year)
+d$lunar <- NA
+for (i in 1:nrow(d)) { d$lunar[i] <- as.character(lun$phase[which.min(abs(lun$jln - d$jln[i]))])  }
 
 dim(d)
 d <- d[which(d$TF>0), ]                                                         # take all samples which have at least 1 female
@@ -90,6 +97,9 @@ d$ang <- atan((b.y-a.y)/(b.x-a.x))*180/pi
 cols <- rainbow(100, start=0.1)
 plot(d$lon, d$lat, col=cols[round(d$ang+90)])
 ################################################################################
+ 
+d$mon <- as.factor(d$mon) 
+d$year <- as.factor(d$year) 
 
 # bin variables as finely as possible while maintaining adequate number of samples per bin
 
@@ -99,14 +109,11 @@ points(d$lon, d$lat, col=d$angbins)
  
 d$depbins <- cut(d$dep, breaks=c(10, 25, 30, 35, 40, 50, 60, 85))
 d$tempbins <- cut(d$temp, breaks=c(10, 20, 22, 24, 30))
-#d$lunarbins <- cut(d$Lunar2, breaks=seq(-1,1,0.5))
 
 table(d$angbins, useNA="always")
 table(d$depbins, useNA="always")
 table(d$tempbins, useNA="always")
 table(d$mon, useNA="always")
-#table(d$lunarbins, useNA="always")
-#table(d$Lunar, useNA="always")
 
 windows()
 barplot(table(d$angbins, useNA="always"))
@@ -132,19 +139,18 @@ barplot(tapply(d$SF/d$TF, list(d$angbins, d$depbins), mean, na.rm=T), beside=T, 
 tapply(d$SF/d$TF, d$year, mean, na.rm=T)
                
 # Month and temp are highly correlated - can't use both
-# no interaction factors because would have to exclude data where highest spawning F encounter rates occur
   
 yrs0 <- as.numeric(names(which(tapply(d$SF/d$TF, d$year, mean, na.rm=T)>0)))   # need to take out 1999
 dim(d)
 d <- d[which(d$year %in% yrs0),]; dim(d)   
   
 # fixed effects model
-outfixed <- glm(cbind(SF, NF) ~ depbins + angbins + mon + tempbins + year,  family="binomial", data=d)
+outfixed <- glm(cbind(SF, NF) ~ depbins + angbins + mon + tempbins + lunar + year,  family="binomial", data=d)
 summary(outfixed) 
 stepAIC(outfixed) 
 
 # mixed effects model - year as random effect
-outrand <- glmer(cbind(SF, NF) ~ depbins + angbins + mon + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+outrand <- glmer(cbind(SF, NF) ~ depbins + angbins + mon + lunar + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
 summary(outrand)                  
 extractAIC(outrand) 
 
@@ -162,21 +168,11 @@ outnorand <- glmer(cbind(SF, NF) ~ 1 + (1|year), family=binomial(logit), data=d,
 
 ############################   CROSS-VALIDATION  ###############################
 
-x <- xvalid(outfrand, d, rand=T, kfold=5)
+x <- xvalid(outfrand, d, rand=T, kfold=10)
 colMeans(x)
 #                                                                               Area.Under.Curve    False.Positive.Rate False.Negative.Rate 
-#  lunarbins + latbins + depbins + tempbins + (1|Year) + MEANCBSBPI             0.8093112           0.3347222           0.4834233
-#  lunarbins + latbins + depbins + (1|Year) + MEANCBSBPI                        0.7733537           0.3141026           0.4686325
-#  lunarbins + latbins + depbins + tempbins + (1|Year)                          0.7594643           0.3920860           0.4651462 
-#  lunarbins + latbins + depbins + tempbins + (1|Month)+ (1|Year) + MEANCBSBPI  0.7199885           0.3633333           0.6510206 
 
-################################################################################
-
-outfrand <- glmer(cbind(Females, NSFemales) ~ lunarbins + latbins + depbins + tempbins + (1|Year) + MEANCBSBPI, data=d, family=binomial(logit), control=glmerControl(optimizer="bobyqa"))
-
-save("outfrand", "d", file="final_RS_model.RData")
-
-################################  END BSB  #####################################
+#############################  END MODELING  ###################################
 
 ############################   PREDICTION PLOTS  ###############################
 
@@ -184,20 +180,16 @@ windows()
 par(mar=c(10,1,1,1), mfrow=c(3,2))
 barplot(summary(outfrand)$coefficients[grep('ang', rownames(summary(outfrand)$coefficients)),1], las=2)
 barplot(summary(outfrand)$coefficients[grep('dep', rownames(summary(outfrand)$coefficients)),1], las=2)
-barplot(summary(outfrand)$coefficients[grep('lun', rownames(summary(outfrand)$coefficients)),1], las=2)
-barplot(summary(outfrand)$coefficients[grep('temp', rownames(summary(outfrand)$coefficients)),1], las=2)
-barplot(summary(outfrand)$coefficients[grep('C', rownames(summary(outfrand)$coefficients)),1], las=2)
+barplot(summary(outfrand)$coefficients[grep('mon', rownames(summary(outfrand)$coefficients)),1], las=2)
+#barplot(summary(outfrand)$coefficients[grep('temp', rownames(summary(outfrand)$coefficients)),1], las=2)
+#barplot(summary(outfrand)$coefficients[grep('C', rownames(summary(outfrand)$coefficients)),1], las=2)
 
-levels(d$lunarbins)[2]
-levels(d$tempbins)[4]
-
-samp <- expand.grid(levels(d$lunarbins)[2], levels(d$tempbins)[4], 
-d$Year[1], unique(d$latbins), unique(d$depbins), unique(d$MEANCBSBPI)) 
-names(samp) <- c("lunarbins", "tempbins", "Year", "latbins", "depbins", "MEANCBSBPI")
+levels(d$mon)[3]
+samp <- expand.grid(d$year[1], unique(d$angbins), unique(d$depbins), d$mon[3]) 
+names(samp) <- c("year", "angbins", "depbins", "mon")
 
 dim(samp)
 outfrand
-
 pred <- predictSE(outfrand, samp, type="response", se.fit=T) 
 
 head(samp)
@@ -205,22 +197,17 @@ samp$pred <- pred$fit
 samp$glmse <- pred$se.fit
 
 par(mfrow=c(3,2))
-barplot(tapply(samp$pred, samp$tempbins, mean, na.rm=T), xlab="Temp (bins)")
-barplot(tapply(samp$pred, samp$latbins, mean, na.rm=T), xlab="lat (bins)")
-barplot(tapply(samp$pred, samp$lunarbins, mean, na.rm=T), xlab="lunar phase")
+barplot(tapply(samp$pred, samp$angbins, mean, na.rm=T), xlab="lat (bins)")
 barplot(tapply(samp$pred, samp$depbins, mean, na.rm=T), xlab="depth (bins)")
-barplot(tapply(samp$pred, samp$Year, mean, na.rm=T), xlab="year")
-barplot(tapply(samp$pred, samp$MEANCBSBPI, mean, na.rm=T), xlab="bathymetry")
+barplot(tapply(samp$pred, samp$year, mean, na.rm=T), xlab="year")
+barplot(tapply(samp$pred, samp$mon, mean, na.rm=T), xlab="bathymetry")
 
-windows()
-par(mfrow=c(2,1))
-
-samp2 <- samp[which(samp$MEANCBSBPI=="(0,1]"),]       #(-7,0.0152]           
-tab <- tapply(samp2$pred, list(samp2$depbins, samp2$latbins), mean, na.rm=T); tab
-tabv <- tapply(samp2$glmse, list(samp2$depbins, samp2$latbins), mean, na.rm=T); tabv
+samp2 <- samp       
+tab <- tapply(samp2$pred, list(samp2$depbins, samp2$angbins), mean, na.rm=T); tab
+tabv <- tapply(samp2$glmse, list(samp2$depbins, samp2$angbins), mean, na.rm=T); tabv
 r <- nrow(tab); w <- ncol(tab)
 cols <- hcl(h= seq(20,300,length=r), c=100); cols2 <- hcl(seq(20,300,length=r), alpha=0.3)
-matplot(t(tab), type="l", lty=1, axes=F, ylim=c(0.7, 1), col=cols, lwd=2, xlab=" ", ylab="probability of spawning condition female", 
+matplot(t(tab), type="l", lty=1, axes=F, ylim=c(0, 0.8), col=cols, lwd=2, xlab=" ", ylab="probability of spawning condition female", 
 main= paste("Temperature = ", substr(samp2$tempbins[1], 2,3), "-", substr(samp2$tempbins[1], 5,6), "degrees;  full moon" ))
 axis(1, las=2, at=1:ncol(tab), lab=paste(unlist(strsplit(unlist(strsplit(colnames(tab), "]")), ","))[seq(2,w*2,2)], "-", substr(unlist(strsplit(unlist(strsplit(colnames(tab), "]")), ","))[seq(1,w*2,2)], 2, 5), " N", sep="")) 
 axis(2, las=2); box()
@@ -229,32 +216,14 @@ lo <- t(tab) - t(tabv)
 for (i in 1:r)  {  polygon(c(1:w,w:1), c(up[1:w,i], lo[w:1,i]), col=cols2[i], border=NA) } 
 legend("bottomleft", paste(substr(rownames(tab),2,3), "-", substr(rownames(tab),5,6), "m", sep=""), col=cols, lty=1, bty="n", lwd=2)
 
-samp2 <- samp[which(samp$MEANCBSBPI=="(1,3]"),]                  
-tab <- tapply(samp2$pred, list(samp2$depbins, samp2$latbins), mean, na.rm=T); tab
-tabv <- tapply(samp2$glmse, list(samp2$depbins, samp2$latbins), mean, na.rm=T); tabv
-r <- nrow(tab); w <- ncol(tab)
-cols <- hcl(h= seq(20,300,length=r), c=100); cols2 <- hcl(seq(20,300,length=r), alpha=0.3)
-matplot(t(tab), type="l", lty=1, axes=F, ylim=c(0.7, 1), col=cols, lwd=2, xlab=" ", ylab="probability of spawning condition female", 
-main= paste("Temperature = ", substr(samp2$tempbins[1], 2,3), "-", substr(samp2$tempbins[1], 5,6), "degrees;  full moon" ))
-axis(1, las=2, at=1:ncol(tab), lab=paste(unlist(strsplit(unlist(strsplit(colnames(tab), "]")), ","))[seq(2,w*2,2)], "-", substr(unlist(strsplit(unlist(strsplit(colnames(tab), "]")), ","))[seq(1,w*2,2)], 2, 5), " N", sep="")) 
-axis(2, las=2); box()
-up <- t(tab) + t(tabv)
-lo <- t(tab) - t(tabv)
-for (i in 1:r)  {  polygon(c(1:w,w:1), c(up[1:w,i], lo[w:1,i]), col=cols2[i], border=NA) } 
-legend("bottomleft", paste(substr(rownames(tab),2,3), "-", substr(rownames(tab),5,6), "m", sep=""), col=cols, lty=1, bty="n", lwd=2)
 
-#  plot with depth bins on x-axis                        
-cols <- hcl(h= seq(30,300,length=w), alpha=1); cols2 <- hcl(seq(30,300,length=w), alpha=0.2)
-matplot(tab, type="l", lty=1, axes=F, ylim=c(0.9, 1), col=cols, lwd=2, xlab="depths", ylab="probability of spawning female")
-axis(1, at=1:r, lab= paste(substr(rownames(tab),2,3), "-", substr(rownames(tab),5,6), "m", sep=""))
-axis(2, las=2); box()
-up <- tab + tabv
-lo <- tab - tabv
-for (i in 1:w)  {  polygon(c(1:r,r:1), c(up[,i], lo[r:1,i]), col=cols2[i], border=NA) }
-legend("bottom", names(table(d$latbins)), col=cols, lty=1, bty="n", lwd=2, horiz=F, ncol=2)
+
+########### stopped here  
 
 
 
+
+###############  redo below #############
 db <- read.dbf("SPAGgrid270_320N_fwcmmPredict.dbf")                             # read in prediction grid
 head(db)
 
