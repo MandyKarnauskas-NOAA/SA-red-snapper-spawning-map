@@ -35,24 +35,52 @@ table(dat$Sex)
 table(dat$Mat)
 table(dat$Inc)
 table(dat$Mat, dat$Year)
+ 
+matcodes <- c(3, 7, "B", "C", "D", "G", "H") 
+dat$fem <- "M"
+dat$fem[which(dat$Sex==2)] <- "NF"
+dat$fem[which(dat$Mat %in% matcodes & dat$Sex==2)] <- "SF"
+table(dat$fem, useNA="always")
 
-class(dat$Day)
-class(dat$Month)
-class(dat$Year)
+tab <- table(dat$PCG, dat$fem)
+d <- data.frame(cbind(rownames(tab), tab[,1:3]), row.names=NULL, stringsAsFactors = FALSE)
+d$M <-  as.numeric(d$M)
+d$NF <-  as.numeric(d$NF)
+d$SF <-  as.numeric(d$SF)
+
+d$TF <- d$NF + d$SF
+
+d$day  <- tapply(dat$Day, dat$PCG, mean)
+d$mon  <- tapply(dat$Month, dat$PCG, mean)
+d$year <- tapply(dat$Year, dat$PCG, mean)
+d$lat  <- tapply(dat$Latitude, dat$PCG, mean)
+d$lon  <- tapply(dat$Longitude, dat$PCG, mean)
+d$dep  <- tapply(dat$StationDepth, dat$PCG, mean)
+d$temp <- tapply(dat$Temp, dat$PCG, mean)
+d$avTL <- tapply(dat$TL, dat$PCG, mean)
+d$avwt <- tapply(dat$WholeWt, dat$PCG, mean)
+ 
+d$day <- as.factor(d$day) 
+d$mon <- as.factor(d$mon) 
+d$year <- as.factor(d$year) 
+d$lat <- as.numeric(d$lat)
+d$lon <- as.numeric(d$lon)
+d$dep <- as.numeric(d$dep)
+d$temp <- as.numeric(d$temp)
+d$avTL <- as.numeric(d$avTL)
+d$avwt <- as.numeric(d$avwt)
+
+f <- d$SF / d$TF
+plot(d$lon, d$lat, cex=f*3)
 
 #dat$Lunar3 <- ifelse(dat$Lunar3==-1,1,dat$Lunar3)     #-1 and 1 are both Full Moon
 #dat$Lunar2 <- ifelse(dat$Lunar2==-1,1,dat$Lunar2)     #-1 and 1 are both Full Moon                                  
 #dat$Lunar <- as.factor(dat$Lunar3)
 
-matcodes <- c(3, 7, "B", "C", "D", "G", "H")
+dim(d)
+d <- d[which(d$TF>0), ]                                                         # take all samples which have at least 1 female
+dim(d)
 
-
-
-d <- d[which(d$Valid>0),]; dim(d)                                               # remove LH equal to zero
-d$known <- d$Females + d$Males + d$Other                                        # not all LH samples have sex ID, so calculate number of indiv. of known sex/stage
-d$allF <- d$Females + d$NSFemales
-d <- d[which(d$allF>0),]; dim(d)                                                # take all samples which have at least 1 female
-#d <- d[which(d$known>2),]; dim(d)                                              # take all samples which have at least 3 sexed/staged fish (REMOVED THIS BECAUSE ONLY WORKING WITH FEMALES NOW)
 
 v <- which(names(d) == "MAXCASPECT") : which(names(d) == "MEANCSLOPE")      # columns for bathymetric variables
 ptab <- matrix(NA, nrow=length(v), ncol=3)
