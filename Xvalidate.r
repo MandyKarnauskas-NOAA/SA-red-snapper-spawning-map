@@ -1,4 +1,4 @@
-#########################  X Validation   ######################################
+#########################  X-fold X-Validation   ###############################
 #########################  M. Karnauskas 7/10/2014  ############################
 #########################  mandy.karnauskas@noaa.gov  ##########################
 #                                                                              #
@@ -6,17 +6,22 @@
 #   Use with caution!!!                                                        #
 #                                                                              #
 ################################################################################
+# 
+# Description: 10-fold cross-validation for binomial logistic regression models
 #
-# dat is original data
-# model is model (glm object) to be X-validated
-# kfold is number of K-fold cross validation groups
-# sample ID is only needed if data are in long format with sites having observations on multiple rows
-#   (in this case ID is needed so that randomization is done by sites rather than data rows)
-# random is used when random effects are present
+# dat         original data
+# model       model object to be X-validated
+# kfold       number of K-fold cross validation groups
+# sample ID   only needed if data are in long 1-column format (zeros and ones)
+#               with sites having observations on multiple rows, and 
+#               randomization by site is desired (in this case, ID is needed so 
+#               that randomization is done by sites rather than data rows)
+#
+#  as of 7/20/2017, can take model outputs from GLM, GLMER, or GAM 
 #
 ################################################################################
 
-xvalid <- function(model, dat, sampleID = c(), kfold = 10, rand=F)  {
+xvalid <- function(model, dat, sampleID = c(), kfold = 10)  {
 
 if (!"pROC" %in% installed.packages()) install.packages("pROC", repos='http://cran.us.r-project.org')
 library(pROC)
@@ -32,11 +37,13 @@ if (length(sampleID) > 0)   {    dat$ind <- dat[,which(names(dat)==sampleID)]
   for (i in unique(dat$ind))  {  dat$rand[which(dat$ind==i)] <- runif(1)  }}
 dat$grp <- as.numeric(cut(dat$rand, quantile(unique(dat$rand), seq(0, 1, length.out = kfold + 1)), include.lowest = TRUE))
 
-if (rand==T)  {  depen <- 1 : length(unlist(strsplit(unlist(strsplit(as.character(model@call[2]), "~")[[1]])[1], ",", fixed=T))   )
-                  cols <- which(colnames(dat) %in% all.vars(model@call)[depen]) }
-if (rand==F)  {  depen <- 1 : (length(all.vars(model$formula)) - length(rhs.vars(model$formula))) 
-                  cols <- which(colnames(dat) %in% all.vars(model$formula)[depen]) }   # deduce # columns in dependent variable
-
+if (class(model)[1]=="glmerMod")  {  depen <- 1: (which(all.names(model@call)=="~") - 1)
+                                  cols <- which(colnames(dat) %in% all.vars(model@call)[depen]) }
+if (class(model)[1]=="glm")       {  depen <- 1 : (length(all.vars(model$formula)) - length(rhs.vars(model$formula))) 
+                                  cols <- which(colnames(dat) %in% all.vars(model$formula)[depen]) }   # deduce # columns in dependent variable
+if (class(model)[1]=="gam")       {  depen <- 1 : (length(all.vars(model$formula)) - length(rhs.vars(model$formula))) 
+                                  cols <- which(colnames(dat) %in% all.vars(model$formula)[depen]) }                                  
+                                  
 # convert to single-column of data (0s and 1s) if necessary
    if (length(depen)==2)  {
       tpos <- dat[rep(1, dat[1,cols[1]]),]
@@ -62,21 +69,25 @@ for (k in 1:kfold)  {
   test  <- dat2[which(dat2$grp==k), ]
   
 modelFitting <- function()  {  
-if (rand==T)  {   fmla <- as.formula(paste("presence ~ ", paste(unlist(strsplit(unlist(strsplit(as.character(model@call[2]), "~")[[1]])[2], "+", fixed=T)), collapse= "+"))) 
-                  res <- glmer(fmla, data=train, family=binomial(logit), control=glmerControl(optimizer="bobyqa"))    
-                  return(res)        }
-if (rand==F)  {   fmla <- as.formula(paste("presence ~ ", paste(rhs.vars(model$formula), collapse= "+")))
-                  res <- glm(fmla, data=train, family="binomial")   
-                  return(res)       } 
+if (class(model)[1]=="glmerMod")   {   fmla <- as.formula(paste("presence ~ ", paste(unlist(strsplit(unlist(strsplit(as.character(model@call[2]), "~")[[1]])[2], "+", fixed=T)), collapse= "+"))) 
+                                  res <- glmer(fmla, data=train, family=binomial(logit), control=glmerControl(optimizer="bobyqa"))    
+                                  return(res)        }
+if (class(model)[1]=="glm")     {   fmla <- as.formula(paste("presence ~ ", paste(rhs.vars(model$formula), collapse= "+")))
+                                res <- glm(fmla, data=train, family="binomial")   
+                                return(res)       } 
+if (class(model)[1]=="gam")     {   fmla <- as.formula(paste("presence ~ ", paste(rhs.vars(model$formula), collapse= "+")))
+                                res <- gam(fmla, data=train, family=binomial, method="REML")
+                                return(res)       }                                                                 
                             }                 
 res <- try(modelFitting(), TRUE) ; res
 
-if (class(res)=="try-error") {  plot(1,1, col=0, axes=F, xlab="", ylab=""); text(1,1, "NA", cex=2) }
+if (class(res)[1]=="try-error") {  plot(1,1, col=0, axes=F, xlab="", ylab=""); text(1,1, "NA", cex=2) }
 
-if (class(res)!="try-error") {
+if (class(res)[1]!="try-error") {
 
-if (rand==T)  {   pred <- as.numeric(predictSE(res, train, type="response", se.fit=F))    }
-if (rand==F)  {   pred <- res$fitted.values     } 
+if (class(model)[1]=="glmerMod")   {   pred <- as.numeric(predictSE(res, train, type="response", se.fit=F))    }
+if (class(model)[1]=="glm")        {   pred <- res$fitted.values     } 
+if (class(model)[1]=="gam")        {   pred <- res$fitted.values     } 
  
 #############################   ROC ANALYSIS   #################################
 # true positive rate (Sensitivity) is plotted in function of the false positive rate (100-Specificity) for different cut-off points of a parameter
@@ -93,8 +104,9 @@ a[1,2] / sum(a[,2])   # FNR for training set
 
 #######################  prediction on test data set  ##########################
 
-if (rand==T)  {   predlogit <- predictSE(res, test, type="response", se.fit=F)   } # predict occurrences for test data set
-if (rand==F)  {   predlogit <- predict.glm(res, test, type="response")  }  # predict occurrences for test data set
+if (class(model)[1]=="glmerMod") {   predlogit <- predictSE(res, test, type="response", se.fit=F)   } # predict occurrences for test data set
+if (class(model)[1]=="glm")      {   predlogit <- predict.glm(res, test, type="response")  }          # predict occurrences for test data set
+if (class(model)[1]=="gam")      {   predlogit <- predict.gam(res, test, type="response")  }          # predict occurrences for test data set
 
 b <- table(predlogit > cutoff, test$presence)
    if(nrow(b)==1)  {   b <- rbind(b, c(0,0))  }
@@ -102,8 +114,8 @@ b <- table(predlogit > cutoff, test$presence)
 summaryTable[k,3] <- b[2,1] / sum(b[,1])       # FPR
 summaryTable[k,4] <- b[1,2] / sum(b[,2])       # FNR
 summaryTable[k,5] <- sum(summaryTable[k,3:4])       # FNR
-         } 
          }      # end if statement for non-error runs
+         }      
          
 options(warn=0)         
          

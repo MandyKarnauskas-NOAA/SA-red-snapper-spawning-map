@@ -157,11 +157,11 @@ outnull <- glm(fem ~ 1, family=binomial(logit), data=d)
 (deviance(outnull)-deviance(out3))/deviance(outnull)      # deviance explained by all factors combined
 
 outnorand <- glmer(fem ~ 1 + (1|year), family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
-(deviance(outnorand)-deviance(out3))/deviance(outnorand)  # deviance explained by fixed factors combined
+(deviance(outnorand)-deviance(out4))/deviance(outnorand)  # deviance explained by fixed factors combined
 
 ############################   CROSS-VALIDATION  ###############################
 
-x <- xvalid(out3, d, rand=T, kfold=5)
+x <- xvalid(out4, d, kfold=5)
 colMeans(x)
 #                                                                               Area.Under.Curve    False.Positive.Rate False.Negative.Rate 
 
@@ -204,9 +204,10 @@ par(mfrow=c(2,6), mex=0.5)
 plot(gam1)
 plot(gamm1$gam)
 
+############################   CROSS-VALIDATION  ###############################
+
 x <- xvalid(gam1, d, rand=T, kfold=5)
-colMeans(x)
-#               
+x; colMeans(x)               
 
 
 #############################  END MODELING  ###################################
