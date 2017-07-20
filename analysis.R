@@ -20,6 +20,12 @@ library(chron)
 library(lme4)
 library(maps)
 library(MASS)
+library(ncdf4)
+library(matlab)
+library(grDevices)
+library(sp)
+library(PBSmapping)
+library(splancs)
 
 ################################################################################
 dat <- read.table("RedSnapperMatData.csv", sep=",", header=T, na.strings = c("NA"))             # read in data
@@ -161,8 +167,8 @@ outnorand <- glmer(fem ~ 1 + (1|year), family=binomial(logit), data=d, control=g
 
 ############################   CROSS-VALIDATION  ###############################
 
-x <- xvalid(out4, d, kfold=5)
-colMeans(x)
+# x <- xvalid(out4, d, kfold=5)
+# colMeans(x)
 #                                                                               Area.Under.Curve    False.Positive.Rate False.Negative.Rate 
 
 #############################   GAM MODEL   ####################################
@@ -197,6 +203,42 @@ gam5 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(year, bs="re"), family=binomial, 
 summary(gam5)
 plot(gam5)
 
+gam6 <- gam(fem ~ te(dep, ang) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam6)
+windows()
+plot(gam6)
+
+gam7 <- gam(fem ~ s(dep) + te(doy, ang) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam7)
+plot(gam7)
+
+gam8 <- gam(fem ~ s(dep) + te(ang, temp) + s(doy) + s(lunar) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam8)
+plot(gam8)
+
+gam9 <- gam(fem ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam9)
+plot(gam9)
+
+gam10 <- gam(fem ~ te(dep, lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam10)
+plot(gam10)
+
+extractAIC(gam1)
+extractAIC(gam2)
+extractAIC(gam3)
+extractAIC(gam4)
+extractAIC(gam5)
+extractAIC(gam6)
+extractAIC(gam7)
+extractAIC(gam8)
+extractAIC(gam9)
+extractAIC(gam10)
+
+min(cbind(extractAIC(gam1), extractAIC(gam2), extractAIC(gam3), extractAIC(gam4), extractAIC(gam5), extractAIC(gam6), extractAIC(gam7), extractAIC(gam8), extractAIC(gam9), extractAIC(gam10))[2,])
+plot(cbind(extractAIC(gam1), extractAIC(gam2), extractAIC(gam3), extractAIC(gam4), extractAIC(gam5), extractAIC(gam6), extractAIC(gam7), extractAIC(gam8), extractAIC(gam9), extractAIC(gam10))[2,], ylab="")
+
+#  compare to GAMM package 
 gamm1 <- gamm(fem ~ s(dep) + s(ang) + s(doy) + s(lunar) + s(temp), family=binomial, random=list(year=~1), data=d)
 summary(gam1)
 summary(gamm1$gam)
@@ -206,88 +248,160 @@ plot(gamm1$gam)
 
 ############################   CROSS-VALIDATION  ###############################
 
-x <- xvalid(gam1, d, rand=T, kfold=5)
-x; colMeans(x)               
+d <- d[which(d$year!=2006),]
 
+dlast5 <- d[which(d$year==2010 | d$year==2011 | d$year==2012 | d$year==2013 | d$year==2014),]
+
+x <- xvalid(gam1, d, kfold=5)
+x; colMeans(x)     
+
+x <- xvalid(gam9, d, kfold=5)
+x; colMeans(x)              
+
+x <- xvalid(gam9, dlast5, kfold=5)
+x; colMeans(x)    
+
+x <- xvalid(out1, d, kfold=5)
+colMeans(x, na.rm=T)
 
 #############################  END MODELING  ###################################
 
 ############################   PREDICTION PLOTS  ###############################
 
-windows()
-par(mar=c(10,1,1,1), mfrow=c(3,2))
-barplot(summary(outfrand)$coefficients[grep('ang', rownames(summary(outfrand)$coefficients)),1], las=2)
-barplot(summary(outfrand)$coefficients[grep('dep', rownames(summary(outfrand)$coefficients)),1], las=2)
-barplot(summary(outfrand)$coefficients[grep('mon', rownames(summary(outfrand)$coefficients)),1], las=2)
-#barplot(summary(outfrand)$coefficients[grep('temp', rownames(summary(outfrand)$coefficients)),1], las=2)
+d$latbins <- cut(d$lat, breaks=seq(27.1, 35.1, 1))
+out1 <- glmer(fem ~ depbins + latbins + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out1)
+
+barplot(summary(out1)$coefficients[grep('dep', rownames(summary(out1)$coefficients)),1], las=2)
+barplot(summary(out1)$coefficients[grep('lat', rownames(summary(out1)$coefficients)),1], las=2)
+barplot(summary(out1)$coefficients[grep('mon', rownames(summary(out1)$coefficients)),1], las=2)
+barplot(summary(out1)$coefficients[grep('lun', rownames(summary(out1)$coefficients)),1], las=2)
+barplot(summary(out1)$coefficients[grep('temp', rownames(summary(out1)$coefficients)),1], las=2)
 #barplot(summary(outfrand)$coefficients[grep('C', rownames(summary(outfrand)$coefficients)),1], las=2)
 
-levels(d$mon)[3]
-samp <- expand.grid(d$year[1], unique(d$angbins), unique(d$depbins), d$mon[3]) 
-names(samp) <- c("year", "angbins", "depbins", "mon")
+samp <- expand.grid(d$year[1], unique(d$latbins), unique(d$depbins), unique(d$mon), unique(d$lun4), unique(d$tempbins)) 
+names(samp) <- c("year", "latbins", "depbins", "mon", "lun4", "tempbins")
 
 dim(samp)
-outfrand
-pred <- predictSE(outfrand, samp, type="response", se.fit=T) 
+out1
+pred <- predictSE(out1, samp, type="response", se.fit=T)       # takes a long time
 
 head(samp)
 samp$pred <- pred$fit
 samp$glmse <- pred$se.fit
 
-par(mfrow=c(3,2))
-barplot(tapply(samp$pred, samp$angbins, mean, na.rm=T), xlab="lat (bins)")
+windows()
+par(mfrow=c(2, 6), mex=0.56)
+
+plot(gam9)
+
 barplot(tapply(samp$pred, samp$depbins, mean, na.rm=T), xlab="depth (bins)")
-barplot(tapply(samp$pred, samp$year, mean, na.rm=T), xlab="year")
-barplot(tapply(samp$pred, samp$mon, mean, na.rm=T), xlab="bathymetry")
+barplot(tapply(samp$pred, samp$latbins, mean, na.rm=T), xlab="lat (bins)")
+barplot(tapply(samp$pred, samp$mon, mean, na.rm=T), xlab="month")
+barplot(tapply(samp$pred, samp$lun4, mean, na.rm=T), xlab="lunar phase")
+barplot(tapply(samp$pred, samp$temp, mean, na.rm=T), xlab="temp")
 
-samp2 <- samp       
-tab <- tapply(samp2$pred, list(samp2$depbins, samp2$angbins), mean, na.rm=T); tab
-tabv <- tapply(samp2$glmse, list(samp2$depbins, samp2$angbins), mean, na.rm=T); tabv
-r <- nrow(tab); w <- ncol(tab)
-cols <- hcl(h= seq(20,300,length=r), c=100); cols2 <- hcl(seq(20,300,length=r), alpha=0.3)
-matplot(t(tab), type="l", lty=1, axes=F, ylim=c(0, 0.8), col=cols, lwd=2, xlab=" ", ylab="probability of spawning condition female")
-axis(1, las=2, at=1:ncol(tab), lab=round(tapply(d$lat, d$angbins, mean), 2)) 
-axis(2, las=2); box()
-up <- t(tab) + t(tabv)
-lo <- t(tab) - t(tabv)
-for (i in 1:r)  {  polygon(c(1:w,w:1), c(up[1:w,i], lo[w:1,i]), col=cols2[i], border=NA) } 
-legend("topright", paste(substr(rownames(tab),2,3), "-", substr(rownames(tab),5,6), "m", sep=""), col=cols, lty=1, bty="n", lwd=2)
+#######################   CREATE PREDICTION POLYGON   ###########################
 
+nc <- nc_open('C://Users/mkarnauskas/Desktop/red_snapper/Mar2016/GEBCO_2014_2D_-84_24_-74_36.nc')        # open netcdf file from GEBCO
+v1 <- nc$var[[1]]
+z <-ncvar_get(nc, v1)
+x <- v1$dim[[1]]$vals
+y <- v1$dim[[2]]$vals
+nc_close(nc)
 
+z[which(z>0)] <- 0
+image(x,y,z)
+abline(h=min(d$lat))
+abline(h=max(d$lat))
 
-########### stopped here  
+c15<- contourLines(x,y,z, levels=c(-15))                  # isobaths for 0, 15, 85m
+  for (i in 1:1) {  lines(c15[[i]]$x, c15[[i]]$y)  }
+c85 <- contourLines(x,y,z, levels=c(-85))
+  for (i in 1:1) {  lines(c85[[i]]$x, c85[[i]]$y)  }
+c0 <- contourLines(x,y,z, levels=c(0))
+  for (i in 1:1) {  lines(c0[[i]]$x, c0[[i]]$y)  }
+  
+##### define shallow and deep polygon boundaries
+sh <- cbind(c15[[1]]$x[seq(100,5000,5)], c15[[1]]$y[seq(100,5000,5)])
+dp <- cbind(c85[[1]]$x[seq(1,2600,3)], c85[[1]]$y[seq(1,2600,3)])
 
+sh <- sh[which(sh[,2] < max(d$lat) & sh[,2] > min(d$lat)),]
+dp <- dp[which(dp[,2] < max(d$lat) & dp[,2] > min(d$lat)),]
 
+points(sh, pch=20, col=2)
+points(dp, pch=20, col=2)
 
+polygon(rbind(sh, dp), col=51)
 
-###############  redo below #############
-db <- read.dbf("SPAGgrid270_320N_fwcmmPredict.dbf")                             # read in prediction grid
-head(db)
+############  convert data points and polygon from LL to UTM (km) ##############
 
-db$latbins <- cut(db$Lat, breaks=c(27, 31.2, 32.2, 35))               # create factor breaks on prediction grid to match model output
-db$depbins <- cut(-db$MAXCDEPTH, breaks=c(10, 30, 40, 50, 70))                  #######  check this - right depth to be using?  
-db$bathbin <- cut(db$meancFSBPI, breaks=c(-7.07, -0.0001, 0, 0.25, 0.667, 11.4))
+p <- as.data.frame(rbind(sh, dp))
+p.utm <- p
+names(p.utm) = c("X","Y")
+attr(p.utm, "projection") = "LL"
+attr(p.utm, "zone") = 17
+UTMPts_pol = convUL(p.utm, km=TRUE)
+names(UTMPts_pol) = c("Easting","Northing")#
+##########  create regular sample grid for kriging
+UTMPts_samp <- gridpts(as.matrix(UTMPts_pol), xs=4, ys=4)       # kriging prediction grid  DEFINE RESOLUTION HERE
+UTMPts_samp <- as.data.frame(UTMPts_samp)
+names(UTMPts_samp) <- c("X", "Y")
+attr(UTMPts_samp, "projection") = "UTM"
+attr(UTMPts_samp, "zone") = 17      # Use UTM zone 16 based on http://www.dmap.co.uk/utmworld.htm
+samp <- convUL(UTMPts_samp, km=TRUE)
 
-unique(d$latbins)
-unique(db$latbins)
-unique(d$depbins)
-unique(db$depbins)
-unique(d$MEANCFSBPI)
-unique(db$bathbin)
+points(samp$X, samp$Y, col=5, pch=19, cex=0.2)
+plot(UTMPts_samp$X, UTMPts_samp$Y, col=5, pch=19, cex=0.1)
+map('usa', xlim=c(-82, -75), ylim=c(26, 36))
+points(samp$X, samp$Y, col=5, pch=19, cex=0.1)
 
-table(db$latbins, useNA="always")                                               # why are there NAs?  I'm not sure.
-table(db$depbins, useNA="always")
-table(db$bathbin, useNA="always")
+#################   extrapolate model predictions to new grid   ################
+gam9
+out1
 
-db$RSpred <- NA                                                                # column for new predictions
-db$RSpredSE <- NA                                                              # column for SE of predictions
-for (i in 1:nrow(samp)) {                                                       # merge predictions!  takes a long time.
-  db$RSpred[which(db$latbins == samp$latbins[i] & db$depbins==samp$depbins[i])] <- samp$pred[i]                        #& db$bathbin == samp$MEANCFSBPI[i]
-  db$RSpredSE[which(db$latbins == samp$latbins[i] & db$depbins==samp$depbins[i])] <- samp$glmse[i] }                    # & db$bathbin == samp$MEANCFSBPI[i]
+#######  add depth
+for (i in 1:nrow(samp)) {  samp$dep[i] <- -z[which.min(abs(x - samp$X[i])), which.min(abs(y - samp$Y[i]))] }
+head(samp)
+samp$lat <- samp$Y
 
-db <- db[names(db)!="latbins"]                                                  # remove the new columns that are no longer needed
-db <- db[names(db)!="depbins"]
-db <- db[names(db)!="bathbin"]
+cols <- rainbow(104)
+plot(samp$X, samp$Y, col=cols[samp$dep], pch=15, cex=0.5)
 
-cols <- rainbow
-map('usa', xlim=c(-8
+samp$doy <- mean(d$doy)
+samp$lunar <- mean(d$lunar)
+samp$temp <- mean(d$temp)
+samp$year <- 2014
+
+samp$dep2 <- samp$dep
+samp$dep2[which(samp$dep2 > 85)] <- 84
+samp$depbins <- cut(samp$dep2, breaks=c(10, 25, 30, 35, 40, 50, 60, 85))
+samp$latbins <- cut(samp$lat, breaks=seq(27.1, 35.1, 1))
+samp$mon <- as.factor(5)
+samp$lun4 <- "New"
+samp$tempbins <- "(24,30]"
+
+predglm <- predict(out1, samp, type="response", se.fit=TRUE) 
+pred <- predict.gam(gam9, samp, type="response", se.fit=TRUE) 
+
+samp$N <- pred$fit
+samp$Nse <- pred$se.fit
+samp$Nglm <- predglm
+
+cols=rainbow(100, start=0.01, end=0.8)[100:1];  plot(1:100, col=cols, pch=20)
+
+par(mfrow=c(1,2))
+map('usa', xlim=c(-82, -75), ylim=c(26.5, 36), main="RS spawning activity"); axis(1); axis(2); box()
+points(samp$X, samp$Y, col=cols[round(samp$N*100)], pch=15, cex=0.5)
+
+yloc <- seq(28, 32, length.out=100)
+for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
+text(x=-76.2, y=yloc[seq(0,100,10)], seq(0,0.9,0.1), pos=1)
+
+map('usa', xlim=c(-82, -75), ylim=c(26.5, 36), main="RS spawning activity"); axis(1); axis(2); box()
+points(samp$X, samp$Y, col=cols[round(samp$Nglm*100)], pch=15, cex=0.5)
+
+yloc <- seq(28, 32, length.out=100)
+for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
+text(x=-76.2, y=yloc[seq(0,100,10)], seq(0,0.9,0.1), pos=1)
+
