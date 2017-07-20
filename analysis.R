@@ -10,13 +10,16 @@ if (!"chron" %in% installed.packages()) install.packages("chron", repos='http://
 if (!"lme4" %in% installed.packages()) install.packages("lme4", repos='http://cran.us.r-project.org')
 if (!"maps" %in% installed.packages()) install.packages("maps", repos='http://cran.us.r-project.org')
 if (!"MASS" %in% installed.packages()) install.packages("MASS", repos='http://cran.us.r-project.org')
+if (!"AICcmodavg" %in% installed.packages()) install.packages("AICcmodavg", repos='http://cran.us.r-project.org')
+if (!"mgcv" %in% installed.packages()) install.packages("mgcv", repos='http://cran.us.r-project.org')
+if (!"gamm4" %in% installed.packages()) install.packages("gamm4", repos='http://cran.us.r-project.org')
+library(mgcv)
+library(gamm4)
+library(AICcmodavg)
 library(chron)
 library(lme4)
 library(maps)
 library(MASS)
-#library(Hmisc) 
-#library(plyr)  
-#library(arm)
 
 ################################################################################
 dat <- read.table("RedSnapperMatData.csv", sep=",", header=T, na.strings = c("NA"))             # read in data
@@ -47,54 +50,27 @@ dat$fem[which(dat$Sex==2)] <- "NF"
 dat$fem[which(dat$Mat %in% matcodes & dat$Sex==2)] <- "SF"
 table(dat$fem, useNA="always")
 
-tab <- table(dat$PCG, dat$fem)
-d <- data.frame(cbind(rownames(tab), tab[,1:3]), row.names=NULL, stringsAsFactors = FALSE)
-d$M <-  as.numeric(d$M)
-d$NF <-  as.numeric(d$NF)
-d$SF <-  as.numeric(d$SF)
-
-d$TF <- d$NF + d$SF
-
-d$day  <- tapply(dat$Day, dat$PCG, mean)
-d$mon  <- tapply(dat$Month, dat$PCG, mean)
-d$year <- tapply(dat$Year, dat$PCG, mean)
-d$lat  <- tapply(dat$Latitude, dat$PCG, mean)
-d$lon  <- tapply(dat$Longitude, dat$PCG, mean)
-d$dep  <- tapply(dat$StationDepth, dat$PCG, mean)
-d$temp <- tapply(dat$Temp, dat$PCG, mean)
-d$avTL <- tapply(dat$TL, dat$PCG, mean)
-d$avwt <- tapply(dat$WholeWt, dat$PCG, mean)
+d <- dat
+names(d)
+names(d)[4:11] <- c("day", "mon", "year", "Date", "lat", "lon", "dep", "temp")
  
-d$day <- as.numeric(d$day) 
-d$mon <- as.numeric(d$mon) 
-d$year <- as.numeric(d$year) 
-d$lat <- as.numeric(d$lat)
-d$lon <- as.numeric(d$lon)
-d$dep <- as.numeric(d$dep)
-d$temp <- as.numeric(d$temp)
-d$avTL <- as.numeric(d$avTL)
-d$avwt <- as.numeric(d$avwt)
+d$fem <- as.factor(d$fem)
+plot(d$lon, d$lat, col=as.numeric(d$fem)-1, pch=20)
 
-f <- d$SF / d$TF
-plot(d$lon, d$lat, cex=f*3)
+d$lunim <- lunar.illumination(as.Date(paste(d$year, "-", d$mon, "-", d$day, sep="")))
+d$lun4 <- lunar.phase(as.Date(paste(d$year, "-", d$mon, "-", d$day, sep="")), name=T)
 
-# data source:  http://www.somacon.com/p570.php  
-lun <- read.table("moon-phases-1990-2016-America_New_York.csv", header=T, sep=",")
-lun$jln <- julian(lun$month, lun$day, lun$year)
-d$jln <- julian(d$mon, d$day, d$year)
-d$lunar <- NA
-for (i in 1:nrow(d)) { d$lunar[i] <- as.character(lun$phase[which.min(abs(lun$jln - d$jln[i]))])  }
-
-dim(d)
-d <- d[which(d$TF>0), ]                                                         # take all samples which have at least 1 female
-dim(d)
+dim(d); table(d$fem)
+d <- d[which(d$fem!="M"), ]                                                         # take all samples which have at least 1 female
+dim(d); table(d$fem)
+table(d$fem)
+table(as.numeric(d$fem)-2)
+d$fem <- (as.numeric(d$fem)-2) 
 
 #################  variable to define position across shelf  ###################
 a.x <- max(d$lon)+0.1
 a.y <- min(d$lat)-0.1
-b.x <- d$lon
-b.y <- d$lat
-d$ang <- atan((b.y-a.y)/(b.x-a.x))*180/pi
+d$ang <- atan((d$lat-a.y)/(d$lon-a.x))*180/pi
 cols <- rainbow(100, start=0.1)
 plot(d$lon, d$lat, col=cols[round(d$ang+90)])
 ################################################################################
@@ -122,56 +98,116 @@ barplot(table(d$depbins, useNA="always"))
 barplot(table(d$tempbins, useNA="always"))
 barplot(table(d$mon, useNA="always"))
 
-barplot(tapply(d$SF/d$TF, d$angbins, mean, na.rm=T))
-barplot(tapply(d$SF/d$TF, d$depbins, mean, na.rm=T))
-barplot(tapply(d$SF/d$TF, d$tempbins, mean, na.rm=T))
-barplot(tapply(d$SF/d$TF, d$mon, mean, na.rm=T))
+barplot(tapply(d$fem, d$angbins, mean, na.rm=T))
+barplot(tapply(d$fem, d$depbins, mean, na.rm=T))
+barplot(tapply(d$fem, d$tempbins, mean, na.rm=T))
+barplot(tapply(d$fem, d$mon, mean, na.rm=T))
+barplot(tapply(d$fem, d$lun4, mean, na.rm=T))
 
 table(d$angbins, d$mon)
 table(d$angbins, d$depbins)
 table(d$angbins, d$tempbins)
 table(d$depbins, d$tempbins)
                   
-round(tapply(d$SF/d$TF, list(d$angbins, d$tempbins), mean, na.rm=T), 3)  # temperature * latitude interaction would be nice, but not enough data
-round(tapply(d$SF/d$TF, list(d$angbins, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction possible!
-barplot(tapply(d$SF/d$TF, list(d$angbins, d$tempbins), mean, na.rm=T), beside=T, col=1:6)
-barplot(tapply(d$SF/d$TF, list(d$angbins, d$depbins), mean, na.rm=T), beside=T, col=1:6)
+round(tapply(d$fem, list(d$angbins, d$mon), mean, na.rm=T), 3)  # temperature * latitude interaction would be nice, but not enough data
+round(tapply(d$fem, list(d$angbins, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction possible!
+barplot(tapply(d$fem, list(d$angbins, d$mon), mean, na.rm=T), beside=T, col=1:6)
+barplot(tapply(d$fem, list(d$angbins, d$depbins), mean, na.rm=T), beside=T, col=1:6)
+matplot(tapply(d$fem, list(d$angbins, d$mon), mean, na.rm=T), type="l")
+matplot(tapply(d$fem, list(d$angbins, d$depbins), mean, na.rm=T), type="l")
 
-tapply(d$SF/d$TF, d$year, mean, na.rm=T)
+barplot(tapply(d$fem, d$year, mean, na.rm=T))
                
 # Month and temp are highly correlated - can't use both
   
-yrs0 <- as.numeric(names(which(tapply(d$SF/d$TF, d$year, mean, na.rm=T)>0)))   # need to take out 1999
+yrs0 <- as.numeric(names(which(tapply(d$fem, d$year, mean, na.rm=T)>0)))   # need to take out 1999
 dim(d)
 d <- d[which(d$year %in% yrs0),]; dim(d)   
   
 # fixed effects model
-outfixed <- glm(cbind(SF, NF) ~ depbins + angbins + mon + tempbins + lunar + year,  family="binomial", data=d)
+outfixed <- glm(fem ~ depbins + angbins + mon + tempbins + lun4 + year,  family="binomial", data=d)
 summary(outfixed) 
 stepAIC(outfixed) 
 
 # mixed effects model - year as random effect
-outrand <- glmer(cbind(SF, NF) ~ depbins + angbins + mon + lunar + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(outrand)                  
-extractAIC(outrand) 
+out1 <- glmer(fem ~ depbins + angbins + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out1)                  
+extractAIC(out1) 
 
-outfrand <- glmer(cbind(SF, NF) ~ depbins + angbins + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(outfrand)                  
-extractAIC(outfrand) 
+out2 <- glmer(fem ~ depbins + angbins + mon + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out2)                  
+extractAIC(out2)
+
+out3 <- glmer(fem ~ depbins + angbins + mon + lun4 + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out3)                  
+extractAIC(out3)
+
+out4 <- glmer(fem ~ depbins + angbins + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out4)                  
+extractAIC(out4) 
+
+extractAIC(out1)
+extractAIC(out2)
+extractAIC(out3)
+extractAIC(out4) 
 
 ################################################################################
 
-outnull <- glm(cbind(SF, NF) ~ 1, family=binomial(logit), data=d)
-(deviance(outnull)-deviance(outfrand))/deviance(outnull)      # deviance explained by all factors combined
+outnull <- glm(fem ~ 1, family=binomial(logit), data=d)
+(deviance(outnull)-deviance(out3))/deviance(outnull)      # deviance explained by all factors combined
 
-outnorand <- glmer(cbind(SF, NF) ~ 1 + (1|year), family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
-(deviance(outnorand)-deviance(outfrand))/deviance(outnorand)  # deviance explained by fixed factors combined
+outnorand <- glmer(fem ~ 1 + (1|year), family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
+(deviance(outnorand)-deviance(out3))/deviance(outnorand)  # deviance explained by fixed factors combined
 
 ############################   CROSS-VALIDATION  ###############################
 
-x <- xvalid(outfrand, d, rand=T, kfold=10)
+x <- xvalid(out3, d, rand=T, kfold=5)
 colMeans(x)
 #                                                                               Area.Under.Curve    False.Positive.Rate False.Negative.Rate 
+
+#############################   GAM MODEL   ####################################
+
+d$doy <- NA
+dinmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+for (i in 1:nrow(d))  {  d$doy[i] <- (sum(dinmon[1:d$mon[i]]) + d$day[i]) / 365  }
+d$lunar <- lunar.phase(as.Date(paste(d$year, "-", d$mon, "-", d$day, sep="")), name=F)
+
+#  FACTORS:  year   mon     depbins    tempbins    lunar     angbins           
+#                   doy     dep        temp        lunim     ang
+#                                                            lat
+                                                  
+gam1 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam1)
+par(mfrow=c(5,6), mex=0.5)
+plot(gam1)
+
+gam2 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(lunim) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam2)
+plot(gam2)
+
+gam3 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(lunar) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam3)
+plot(gam3); plot.new()
+
+gam4 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam4)
+plot(gam4); plot.new()
+
+gam5 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(year, bs="re"), family=binomial, data=d, method="REML" )
+summary(gam5)
+plot(gam5)
+
+gamm1 <- gamm(fem ~ s(dep) + s(ang) + s(doy) + s(lunar) + s(temp), family=binomial, random=list(year=~1), data=d)
+summary(gam1)
+summary(gamm1$gam)
+par(mfrow=c(2,6), mex=0.5)
+plot(gam1)
+plot(gamm1$gam)
+
+x <- xvalid(gam1, d, rand=T, kfold=5)
+colMeans(x)
+#               
+
 
 #############################  END MODELING  ###################################
 
@@ -208,14 +244,13 @@ tab <- tapply(samp2$pred, list(samp2$depbins, samp2$angbins), mean, na.rm=T); ta
 tabv <- tapply(samp2$glmse, list(samp2$depbins, samp2$angbins), mean, na.rm=T); tabv
 r <- nrow(tab); w <- ncol(tab)
 cols <- hcl(h= seq(20,300,length=r), c=100); cols2 <- hcl(seq(20,300,length=r), alpha=0.3)
-matplot(t(tab), type="l", lty=1, axes=F, ylim=c(0, 0.8), col=cols, lwd=2, xlab=" ", ylab="probability of spawning condition female", 
-main= paste("Temperature = ", substr(samp2$tempbins[1], 2,3), "-", substr(samp2$tempbins[1], 5,6), "degrees;  full moon" ))
-axis(1, las=2, at=1:ncol(tab), lab=paste(unlist(strsplit(unlist(strsplit(colnames(tab), "]")), ","))[seq(2,w*2,2)], "-", substr(unlist(strsplit(unlist(strsplit(colnames(tab), "]")), ","))[seq(1,w*2,2)], 2, 5), " N", sep="")) 
+matplot(t(tab), type="l", lty=1, axes=F, ylim=c(0, 0.8), col=cols, lwd=2, xlab=" ", ylab="probability of spawning condition female")
+axis(1, las=2, at=1:ncol(tab), lab=round(tapply(d$lat, d$angbins, mean), 2)) 
 axis(2, las=2); box()
 up <- t(tab) + t(tabv)
 lo <- t(tab) - t(tabv)
 for (i in 1:r)  {  polygon(c(1:w,w:1), c(up[1:w,i], lo[w:1,i]), col=cols2[i], border=NA) } 
-legend("bottomleft", paste(substr(rownames(tab),2,3), "-", substr(rownames(tab),5,6), "m", sep=""), col=cols, lty=1, bty="n", lwd=2)
+legend("topright", paste(substr(rownames(tab),2,3), "-", substr(rownames(tab),5,6), "m", sep=""), col=cols, lty=1, bty="n", lwd=2)
 
 
 
