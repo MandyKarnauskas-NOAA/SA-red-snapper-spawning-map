@@ -1,6 +1,16 @@
-
+################################################################################
+#
+#   M. Karnauskas, Jul 21, 2017                                     
+#   Part II of code - run analysis.R first
+#
+#   Compares model predictions from GAMMs to GLMMs
+#   Creates regularly spaced prediction grid, extracts depth measurements for 
+#   prediction points, calculated predictions and plots predictions on map
+#
+################################################################################
 rm(list=ls())
-load("model_parameters.RData") 
+load("model_parameters.RData")
+load("model_data.RData")    
 
 ################################  libraries  ###################################
 if (!"lme4" %in% installed.packages()) install.packages("lme4", repos='http://cran.us.r-project.org')
@@ -20,11 +30,11 @@ library(splancs)
 library(PBSmapping)
 library(sp)
 library(matlab)
-library(ncdf4)
+library(ncdf4)          
 ################################################################################
 
-#######################   CREATE PREDICTION POLYGON   ###########################
-
+#######################   CREATE PREDICTION POLYGON   ##########################
+                                                              
 nc <- nc_open('GEBCO_2014_2D_-84_24_-74_36.nc')                                 # open netcdf file from GEBCO
 v1 <- nc$var[[1]]
 z <-ncvar_get(nc, v1)
@@ -61,6 +71,7 @@ attr(p.utm, "zone") = 17                                                        
 UTMPts_pol = convUL(p.utm, km=TRUE)                                             # convert coordinates to km so that prediction grid is regularly spaced
 names(UTMPts_pol) = c("Easting","Northing")
 
+########################   CREATE PREDICTION GRID   ############################
 UTMPts_samp <- gridpts(as.matrix(UTMPts_pol), xs=4, ys=4)                       # prediction grid  DEFINE RESOLUTION HERE  (now 4km grid)
 UTMPts_samp <- as.data.frame(UTMPts_samp)
 names(UTMPts_samp) <- c("X", "Y")
@@ -73,10 +84,6 @@ plot(UTMPts_samp$X, UTMPts_samp$Y, col=5, pch=19, cex=0.1)                      
 map('usa', xlim=c(-82, -75), ylim=c(26, 36))
 points(samp$X, samp$Y, col=5, pch=19, cex=0.1)
 
-#################   extrapolate model predictions to new grid   ################
-gamf
-glmf
-
 ####################   add depths to prediction grid   #########################
 for (i in 1:nrow(samp)) {  samp$dep[i] <- -z[which.min(abs(x - samp$X[i])), which.min(abs(y - samp$Y[i]))] }
 head(samp)
@@ -84,42 +91,97 @@ samp$lat <- samp$Y
 cols <- rainbow(104)
 plot(samp$X, samp$Y, col=cols[samp$dep], pch=15, cex=0.5)                       # check assignment of depths
 
+#################   EXTRAPOLATE MODEL PREDICTIONS TO NEW GRID   ################
+gamf
+glmf
+
+#  add other required factors to prediction grid 
+dep2 <- samp$dep
+dep2[which(dep2 > 85)] <- 84                                                    # replace deeper values so that prediction bins match
+samp$depbins <- cut(dep2, breaks=c(10, 25, 30, 35, 40, 50, 60, 85))
+samp$latbins <- cut(samp$lat, breaks=seq(27.1, 35.1, 1))
+samp$mon <- as.factor(7)                                                        # encompasses mean doy 
+samp$lun4 <- "Full"                                                             # encompasses mean lunar phase
+samp$tempbins <- "(22,24]"                                                      # encompasses mean temp
+
 samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
 samp$lunar <- mean(d$lunar)                                                     
 samp$temp <- mean(d$temp)
-samp$year <- 2014
+samp$year <- 1997
 
-samp$dep2 <- samp$dep
-samp$dep2[which(samp$dep2 > 85)] <- 84                                          # replace deeper values so that prediction bins match
-samp$depbins <- cut(samp$dep2, breaks=c(10, 25, 30, 35, 40, 50, 60, 85))
-samp$latbins <- cut(samp$lat, breaks=seq(27.1, 35.1, 1))
-samp$mon <- as.factor(8)
-samp$lun4 <- "Full"
-samp$tempbins <- "(22,24]"
-
-predglm <- predictSE  (glmf, samp, type="response", se.fit=TRUE) 
+##########################   predict on new grid   #############################
+predglm <- predict  (glmf, samp, type="response") 
 predgam <- predict.gam(gamf, samp, type="response", se.fit=TRUE) 
 
-samp$Nglm <- predglm$fit
-samp$Nglmse <- predglm$se.fit
+samp$Nglm <- predglm                                                            # add to matrix
 samp$Ngam <- predgam$fit
 samp$Ngamse <- predgam$se.fit
 
 cols=rainbow(100, start=0.01, end=0.8)[100:1];  plot(1:100, col=cols, pch=20)   # choose colormap
+yloc <- seq(28, 32, length.out=100)                                             # compare results between GAM and GLM
 
-par(mfrow=c(1,2))                                                               # compare results between GAM and GLM
-map('usa', xlim=c(-82, -75), ylim=c(26.5, 36), main="RS spawning activity"); axis(1); axis(2); box()
+################### compare GLMM vs GAMM predictions  ##########################
+par(mfrow=c(1,2)) 
+map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GAMM model")
 points(samp$X, samp$Y, col=cols[round(samp$Ngam*100)], pch=15, cex=0.5)
-
-yloc <- seq(28, 32, length.out=100)
 for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
-text(x=-76.2, y=yloc[seq(0,100,10)], seq(0,0.9,0.1), pos=1)
-
-map('usa', xlim=c(-82, -75), ylim=c(26.5, 36), main="RS spawning activity"); axis(1); axis(2); box()
+text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
+  text(-76.8, 27.6, "spawning female\nprobability of occurrence")
+  
+map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GLMM model")
 points(samp$X, samp$Y, col=cols[round(samp$Nglm*100)], pch=15, cex=0.5)
-
-yloc <- seq(28, 32, length.out=100)
 for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
-text(x=-76.2, y=yloc[seq(0,100,10)], seq(0,0.9,0.1), pos=1)
+text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
+  text(-76.8, 27.6, "spawning female\nprobability of occurrence")
+  
+###################    plot GAMM predictions and SE   ##########################
+par(mfrow=c(1,2)) 
+map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GAMM model")
+points(samp$X, samp$Y, col=cols[round(samp$Ngam*100)], pch=15, cex=0.5)
+for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
+text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
+  text(-76.8, 27.6, "spawning female\nprobability of occurrence")
+  
+map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GLMM model S.E.")
+points(samp$X, samp$Y, col=cols[round(samp$Ngamse*100)], pch=15, cex=0.5)
+for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
+text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
+
+################  plot spawning activity by day of year  #######################
+par(mfrow=c(3,4), mex=0.6) 
+
+for (i in seq(min(d$doy), max(d$doy), length.out=12))  {
+  samp$doy <- i                                                                   # loop through days of year
+  predgam <- predict.gam(gamf, samp, type="response", se.fit=TRUE) 
+
+  map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); 
+  mtext(side=3, paste("RS spawning activity\nday", round(mean(samp$doy*365)), "of year"), cex=0.8)
+  points(samp$X, samp$Y, col=cols[round(predgam$fit*100)], pch=15, cex=0.5)
+  for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
+  text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
+  text(-77.2, 27.6, "spawning female\nprobability of occurrence")  } 
+  
+################  plot spawning activity by lunar phase  #######################
+boxplot(d$lunar ~ d$lun4)
+
+par(mfrow=c(2,2), mex=0.5) 
+samp$doy <- mean(d$doy)
+n <- c("New", "Waxing", "Full", "Waning")
+
+for (i in 1:4)  {
+  samp$lunar <- seq(0.5, 5, length.out=4)[i]                                    # loop through lunar phases
+  predgam <- predict.gam(gamf, samp, type="response", se.fit=TRUE) 
+
+  map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); 
+  mtext(side=3, paste("RS spawning activity\n", n[i], "Moon"), cex=0.8)
+  points(samp$X, samp$Y, col=cols[round(predgam$fit*100)], pch=15, cex=0.5)
+  for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
+  text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)  
+  text(-76.8, 27.6, "spawning female\nprobability of occurrence") } 
+
+####################################  END  #####################################
+
+
+
 
                                                                  

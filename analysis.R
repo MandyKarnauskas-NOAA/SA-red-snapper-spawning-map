@@ -388,6 +388,7 @@ barplot(tapply(pred$pred, pred$temp, mean, na.rm=T), xlab="temp")               
 ##########################  SAVE MODEL OUTPUTS  ################################
 
 save("gamf", "glmf", file="model_parameters.RData")                             # save final model results
+save("d", file="model_data.RData")   
 
 ##################################  END  #######################################
 
