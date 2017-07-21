@@ -60,7 +60,7 @@ if (class(model)[1]=="gam")       {  depen <- 1 : (length(all.vars(model$formula
       
    if (length(depen)==1)   {  dat$presence <- dat[,cols];  dat2 <- dat   }
 
-options(warn=2)
+options(warn=2)  # output model non-convergence errors so that can catch in loop and eliminate those runs
 
 for (k in 1:kfold)  {
   summaryTable[k,1] <- k
@@ -120,11 +120,11 @@ summaryTable[k,5] <- sum(summaryTable[k,3:4])       # FNR
 options(warn=0)         
          
 #########################   plot results   #####################################
-barplot(cbind( colMeans(summaryTable, na.rm=T)[3:4], rbind(summaryTable[,3], summaryTable[,4])), args=c("top", horiz=T, bty="n"),
-    beside=F, ylim=c(0,1.1), legend=chartr(".", " ", colnames(summaryTable)[3:4]), names.arg=c("MEAN", 1:kfold), axes=F)
+barplot(cbind(colMeans(summaryTable, na.rm=T)[3:4], rbind(summaryTable[,3], summaryTable[,4])), args=c("top", horiz=T, bty="n"),
+    beside=F, ylim=c(0,1.1), legend=chartr(".", " ", colnames(summaryTable)[3:4]), names.arg=c("MEAN", 1:kfold), axes=F, 
+    main=paste("FPR + FNR =", round(mean(summaryTable[,5], na.rm=T), 3)))
     axis(2, at=seq(0,1,0.1), las=2)
 return(summaryTable)
-
        }
        
 ##############################  end function  ##################################
