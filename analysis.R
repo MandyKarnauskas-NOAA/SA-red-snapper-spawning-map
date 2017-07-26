@@ -38,6 +38,30 @@ library(gamm4)
 ################################################################################
 
 dat <- read.table("RedSnapperMatData.csv", sep=",", header=T, na.strings = c("NA"))       # read in data
+p <- read.table("RedSnapperSamplingandAbundance.csv", sep=",", header=T)
+
+head(dat)
+head(p)
+table(dat$Year)
+table(p$Year)
+
+table(dat$Year, dat$Mat)
+p <- p[which(p$Year < 2015),]
+dat <- dat[which(dat$Year < 2015),]
+table(dat$Year)
+table(p$Year)
+names(table(dat$Year)) == names(table(p$Year))
+table(dat$Year) / table(p$Year)
+barplot(table(dat$Year) / table(p$Year))
+
+p <- p[which(!is.na(p$Latitude)),]
+table((p$StationDepth <= 140))
+p <- p[which(p$StationDepth <= 140),]
+
+d1 <- as.data.frame(table(dat$PCG))
+d2 <- merge(p, d1, by.x="PCG", by.y="Var1")
+summary(d2$Abundance==d2$Freq)                                                  # ensure reference site file matches up with data file
+d2[which(d2$Abundance!=d2$Freq),]                                               # two sites are off by N of 1; recheck when updated data are available.
 
 length(unique(dat$PCG))                                                         # getting to know data
 length(unique(dat$Latitude))
@@ -64,24 +88,57 @@ dat$fem <- "M"
 dat$fem[which(dat$Sex==2)] <- "NF"
 dat$fem[which(dat$Mat %in% matcodes & dat$Sex==2)] <- "SF"
 table(dat$fem, useNA="always")
+dim(dat)
+dat <- dat[which(dat$fem=="SF"), ]  
+dim(dat)
 
-d <- dat                                                                        # rename to match existing code
-names(d)[4:11] <- c("day", "mon", "year", "Date", "lat", "lon", "dep", "temp")
-names(d)
- 
-d$fem <- as.factor(d$fem)                                                       # view locations of mature females
-plot(d$lon, d$lat, col=as.numeric(d$fem)-1, pch=20)
+mis <- which(is.na(dat$TL))
+out <- lm(dat$TL ~ dat$FL)
+for (i in mis)  {  dat$TL[i] <- round(out$coef[1] + out$coef[2] * dat$FL[i])   }
+
+#dat$lenbins <- cut(dat$TL, seq(305, 905, 100))  
+#table(dat$lenbins, useNA="always")
+#tab <- as.data.frame.matrix(table(dat$PCG, dat$lenbins))
+#tab$PCG <- rownames(tab)
+
+dim(p)
+dim(tab)
+dmerge <- merge(p, tab, by="PCG", all.x = T)
+dim(dmerge)
+names(dmerge)
+
+dmerge <- dmerge[-which(names(dmerge)=="Species" | names(dmerge)=="Gear")]
+                                                                        # rename to match existing code
+names(dmerge)[4:13] <- c("day", "mon", "year", "Date", "lat", "lon", "dep", "type", "abundance", "temp")
+names(dmerge)
+
+ll <- as.numeric(substr((strsplit(names(dmerge)[grep('0', names(dmerge))], ",")), 5, 7))
+ul <- as.numeric(substr((strsplit(names(dmerge)[grep('0', names(dmerge))], ",")), 12, 14))
+names(dmerge)[grep('0', names(dmerge))] <- paste("L",(ll+ul)/2, sep="")
+names(dmerge)
+
+datcol <- grep('L', names(dmerge))
+
+d <- c()
+for (i in datcol)  {  dsub <- cbind(dmerge[1:(min(datcol-1))], dmerge[i], names(dmerge[i]))  
+                      names(dsub)[(ncol(dsub)-1): ncol(dsub)] <- c("N", "lenclass") 
+                      d <- rbind(d, dsub)   }
+  
+dim(dmerge) * length(unique(d$lenclass))
+dim(d)
+d$N[which(is.na(d$N))] <- 0
+  
+map('usa', xlim=c(-82, -75), ylim=c(26, 36))                                            
+points(d$lon, d$lat, col=as.numeric(d$N), pch=20)                                 # view locations of mature females
+
+summary(d$N==0)
+
+tapply(d$N, d$lenclass, sum)                                                    # check numbers 
+colSums(dmerge[grep('L', names(dmerge))], na.rm=T)
 
 ###############  extract lunar phase data using lunar package  #################
 d$lunim <- lunar.illumination(as.Date(paste(d$year, "-", d$mon, "-", d$day, sep="")))   # lunar illumination
 d$lun4 <- lunar.phase(as.Date(paste(d$year, "-", d$mon, "-", d$day, sep="")), name=T)   # lunar phase - 4-name format
-
-dim(d); table(d$fem)
-d <- d[which(d$fem!="M"), ]                                                     # remove all males - not used in this analysis
-dim(d); table(d$fem)
-table(d$fem)
-table(as.numeric(d$fem)-2)
-d$fem <- (as.numeric(d$fem)-2)                                                  # convert to 0/1: 0=nonspawning female; 1=spawning female
 
 ###  variable to define position across shelf - use as alternate to latitude ###
 a.x <- max(d$lon)+0.1
@@ -102,7 +159,7 @@ d$angbin2 <- cut(d$ang, breaks=c(-90, -60, -45, -30, 0))
 map('usa', xlim=c(-82, -75), ylim=c(26, 36))
 points(d$lon, d$lat, col=d$angbins)
  
-d$depbins <- cut(d$dep, breaks=c(10, 25, 30, 35, 40, 50, 60, 85))
+d$depbins <- cut(d$dep, breaks=c(10, 25, 30, 35, 40, 50, 60, 140))
 d$tempbins <- cut(d$temp, breaks=c(10, 20, 22, 24, 30))
 d$latbins <- cut(d$lat, breaks=seq(27.1, 35.1, 1))
 
@@ -119,104 +176,44 @@ barplot(table(d$depbins, useNA="always"))
 barplot(table(d$tempbins, useNA="always"))
 barplot(table(d$latbins, useNA="always"))
 barplot(table(d$mon, useNA="always"))
+barplot(table(d$lenclass, useNA="always"))
 
-barplot(tapply(d$fem, d$angbins, mean, na.rm=T))                                # look at percent spawning F by bin
-barplot(tapply(d$fem, d$depbins, mean, na.rm=T))
-barplot(tapply(d$fem, d$tempbins, mean, na.rm=T))
-barplot(tapply(d$fem, d$latbins, mean, na.rm=T))
-barplot(tapply(d$fem, d$mon, mean, na.rm=T))
-barplot(tapply(d$fem, d$lun4, mean, na.rm=T))
+barplot(tapply(d$N, d$angbins, mean, na.rm=T))                                # look at percent spawning F by bin
+barplot(tapply(d$N, d$depbins, mean, na.rm=T))
+barplot(tapply(d$N, d$tempbins, mean, na.rm=T))
+barplot(tapply(d$N, d$latbins, mean, na.rm=T))
+barplot(tapply(d$N, d$mon, mean, na.rm=T))
+barplot(tapply(d$N, d$lun4, mean, na.rm=T))
+barplot(tapply(d$N, d$lenclass, mean, na.rm=T))
 
 table(d$angbins, d$mon)
 table(d$angbins, d$depbins)
 table(d$angbins, d$tempbins)
 table(d$depbins, d$tempbins)
+
                   
-round(tapply(d$fem, list(d$angbins, d$mon), mean, na.rm=T), 3)  # month * latitude interaction can be done with fewer bins
-round(tapply(d$fem, list(d$angbins, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction can be done with fewer bins
-round(tapply(d$fem, list(d$angbin2, d$tempbins), mean, na.rm=T), 3)  # temp * latitude interaction can be done
-round(tapply(d$fem, list(d$angbin2, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction can be done 
-barplot(tapply(d$fem, list(d$angbin2, d$tempbins), mean, na.rm=T), beside=T, col=1:6)     # looks to be important
-barplot(tapply(d$fem, list(d$angbin2, d$depbins), mean, na.rm=T), beside=T, col=1:6)
-matplot(tapply(d$fem, list(d$angbin2, d$tempbins), mean, na.rm=T), type="l")         # interactions appear to be potentially important
-matplot(tapply(d$fem, list(d$depbins, d$angbin2), mean, na.rm=T), type="l")
+round(tapply(d$N, list(d$angbins, d$mon), mean, na.rm=T), 3)  # month * latitude interaction can be done with fewer bins
+round(tapply(d$N, list(d$angbins, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction can be done with fewer bins
+round(tapply(d$N, list(d$angbin2, d$tempbins), mean, na.rm=T), 3)  # temp * latitude interaction can be done
+round(tapply(d$N, list(d$angbin2, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction can be done 
+barplot(tapply(d$N, list(d$angbin2, d$tempbins), mean, na.rm=T), beside=T, col=1:6)     # looks to be important
+barplot(tapply(d$N, list(d$angbin2, d$depbins), mean, na.rm=T), beside=T, col=1:6)
+matplot(tapply(d$N, list(d$angbin2, d$tempbins), mean, na.rm=T), type="l")         # interactions appear to be potentially important
+matplot(tapply(d$N, list(d$depbins, d$angbin2), mean, na.rm=T), type="l")
+matplot(tapply(d$N, list(d$latbins, d$lenclass), mean, na.rm=T), type="l")         # interactions appear to be potentially important
+matplot(tapply(d$N, list(d$depbins, d$lenclass), mean, na.rm=T), type="l")
+barplot(tapply(d$N, list(d$lenclass, d$depbins), mean, na.rm=T), beside=T, col=1:6)
 
-barplot(tapply(d$fem, d$year, mean, na.rm=T))
+barplot(tapply(d$N, d$year, mean, na.rm=T))
 
-yrs0 <- as.numeric(names(which(tapply(d$fem, d$year, mean, na.rm=T)>0)))        # take out years with no female data
+yrs0 <- as.numeric(names(which(tapply(d$N, d$year, mean, na.rm=T)>0)))        # take out years with no female data
 dim(d)
-d <- d[which(d$year != 2006),];                                                 # take out 2006 - only one observation
+#d <- d[which(d$year != 2006),];                                                 # take out 2006 - only one observation
 dim(d)
 d <- d[which(d$year %in% yrs0),]; dim(d)   
 
-# mixed effects model - year as random effect
-out1 <- glmer(fem ~ depbins + angbins + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(out1)                  
-extractAIC(out1) 
-
-out2 <- glmer(fem ~ depbins + angbins + mon + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(out2)                  
-extractAIC(out2)
-
-out3 <- glmer(fem ~ depbins + angbins + mon + lun4 + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(out3)                  
-extractAIC(out3)
-
-out4 <- glmer(fem ~ depbins + angbins + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(out4)                  
-extractAIC(out4) 
-
-out5 <- glmer(fem ~ depbins + latbins + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(out5)                  
-extractAIC(out5) 
-
-out6 <- glmer(fem ~ depbins * angbin2 + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(out6)                  # does not converge well 
-extractAIC(out6) 
-
-out7 <- glmer(fem ~ depbins + angbin2 * tempbins + lun4 + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
-summary(out7)                  # does not converge well
-extractAIC(out7) 
-
-extractAIC(out1)                                                                # 1218.533
-extractAIC(out2)                                                                # 1217.303
-extractAIC(out3)                                                                # 1218.389
-extractAIC(out4)                                                                # 1217.029    lowest AIC but not by much
-extractAIC(out5)                                                                # 1218.478
-extractAIC(out6)                                                                # 1222        interaction factors don't seem to help
-extractAIC(out7)                                                                # 1290
-
-################################################################################
-
-outnull <- glm(fem ~ 1, family=binomial(logit), data=d)
-(deviance(outnull)-deviance(out3))/deviance(outnull)      # deviance explained by all factors combined
-
-outnorand <- glmer(fem ~ 1 + (1|year), family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
-(deviance(outnorand)-deviance(out4))/deviance(outnorand)  # deviance explained by fixed factors combined
-
-############################   CROSS-VALIDATION  ###############################
-
-par(mfrow=c(5,6))
-x1 <- xvalid(out1, d, kfold=5)
-x2 <- xvalid(out2, d, kfold=5)
-x3 <- xvalid(out3, d, kfold=5)
-x4 <- xvalid(out4, d, kfold=5)                                                  # best model? 
-x5 <- xvalid(out5, d, kfold=5)
-#                                                                                 Area.Under.Curve    False.Positive.Rate False.Negative.Rate  total.FPR_FNR 
-colMeans(x1, na.rm=T)                                                           #  0.7711004           0.3333786           0.2710542           0.6044328
-colMeans(x2, na.rm=T)                                                           #  0.7657702           0.3201122           0.2773341           0.5974464
-colMeans(x3, na.rm=T)                                                           #  0.7649905           0.3366355           0.2842509           0.6208864 
-colMeans(x4, na.rm=T)                                                           #  0.7602100           0.2799078           0.3173104           0.5972182 
-colMeans(x5, na.rm=T)                                                           #  0.7615463           0.3205856           0.2984228           0.6190084 
-
-plot(out4)
-sum(residuals(out4, type = "pearson")^2)
-deviance(out4)
-1 - pchisq(deviance(out4), df.residual(out4))      # not a great fit ?
-
-
-############################  END GLM MODEL  ###################################
-
+d$pres <- d$N
+d$pres[which(d$pres>1)] <- 1
 
 #############################   GAM MODEL   ####################################
 
@@ -229,7 +226,7 @@ d$lunar <- lunar.phase(as.Date(paste(d$year,"-",d$mon,"-",d$day,sep="")), name=F
 #                   doy     dep        temp        lunim     ang
 #                                                            lat
                                                   
-gam1 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam1 <- gam(pres ~ lenclass + s(dep) + s(ang) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam1)
 par(mfrow=c(5,6), mex=0.5)
 plot(gam1)
@@ -345,6 +342,77 @@ x; colMeans(x)                        # total FPR + FNR = 0.5286315
 
 x <- xvalid(out4, d, kfold=5)
 colMeans(x, na.rm=T)                # GAM outperforms GLM
+
+# mixed effects model - year as random effect
+out1 <- glmer(pres ~ lenclass + depbins + angbins + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out1)                  
+extractAIC(out1) 
+
+out2 <- glmer(fem ~ depbins + angbins + mon + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out2)                  
+extractAIC(out2)
+
+out3 <- glmer(fem ~ depbins + angbins + mon + lun4 + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out3)                  
+extractAIC(out3)
+
+out4 <- glmer(fem ~ depbins + angbins + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out4)                  
+extractAIC(out4) 
+
+out5 <- glmer(fem ~ depbins + latbins + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out5)                  
+extractAIC(out5) 
+
+out6 <- glmer(fem ~ depbins * angbin2 + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out6)                  # does not converge well 
+extractAIC(out6) 
+
+out7 <- glmer(fem ~ depbins + angbin2 * tempbins + lun4 + mon + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+summary(out7)                  # does not converge well
+extractAIC(out7) 
+
+extractAIC(out1)                                                                # 1218.533
+extractAIC(out2)                                                                # 1217.303
+extractAIC(out3)                                                                # 1218.389
+extractAIC(out4)                                                                # 1217.029    lowest AIC but not by much
+extractAIC(out5)                                                                # 1218.478
+extractAIC(out6)                                                                # 1222        interaction factors don't seem to help
+extractAIC(out7)                                                                # 1290
+
+################################################################################
+
+outnull <- glm(fem ~ 1, family=binomial(logit), data=d)
+(deviance(outnull)-deviance(out3))/deviance(outnull)      # deviance explained by all factors combined
+
+outnorand <- glmer(fem ~ 1 + (1|year), family=binomial(logit), data=d, control=glmerControl(optimizer="bobyqa"))
+(deviance(outnorand)-deviance(out4))/deviance(outnorand)  # deviance explained by fixed factors combined
+
+############################   CROSS-VALIDATION  ###############################
+
+par(mfrow=c(5,6))
+x1 <- xvalid(out1, d, kfold=5)
+x2 <- xvalid(out2, d, kfold=5)
+x3 <- xvalid(out3, d, kfold=5)
+x4 <- xvalid(out4, d, kfold=5)                                                  # best model? 
+x5 <- xvalid(out5, d, kfold=5)
+#                                                                                 Area.Under.Curve    False.Positive.Rate False.Negative.Rate  total.FPR_FNR 
+colMeans(x1, na.rm=T)                                                           #  0.7711004           0.3333786           0.2710542           0.6044328
+colMeans(x2, na.rm=T)                                                           #  0.7657702           0.3201122           0.2773341           0.5974464
+colMeans(x3, na.rm=T)                                                           #  0.7649905           0.3366355           0.2842509           0.6208864 
+colMeans(x4, na.rm=T)                                                           #  0.7602100           0.2799078           0.3173104           0.5972182 
+colMeans(x5, na.rm=T)                                                           #  0.7615463           0.3205856           0.2984228           0.6190084 
+
+plot(out4)
+sum(residuals(out4, type = "pearson")^2)
+deviance(out4)
+1 - pchisq(deviance(out4), df.residual(out4))      # not a great fit ?
+
+
+############################  END GLM MODEL  ###################################
+
+
+
 
 #############################  END MODELING  ###################################
 
