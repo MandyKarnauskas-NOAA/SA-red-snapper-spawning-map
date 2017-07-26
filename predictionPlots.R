@@ -106,8 +106,16 @@ samp$tempbins <- "(22,24]"                                                      
 
 samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
 samp$lunar <- mean(d$lunar)                                                     
-samp$temp <- mean(d$temp)
+samp$temp <- mean(d$temp, na.rm=T)
 samp$year <- 1997
+
+samp2 <- c()
+for (i in unique(d$lenclass))  { 
+    samp$lenclass <- i
+    samp2 <- rbind(samp2, samp)  }
+    
+samp <- samp2
+samp$lenclass
 
 ##########################   predict on new grid   #############################
 predglm <- predict  (glmf, samp, type="response") 
@@ -117,8 +125,19 @@ samp$Nglm <- predglm                                                            
 samp$Ngam <- predgam$fit
 samp$Ngamse <- predgam$se.fit
 
-cols=rainbow(100, start=0.01, end=0.8)[100:1];  plot(1:100, col=cols, pch=20)   # choose colormap
+cols=rainbow(20, start=0.01, end=0.8)[20:1];  plot(1:100, col=cols, pch=20)   # choose colormap
 yloc <- seq(28, 32, length.out=100)                                             # compare results between GAM and GLM
+
+
+par(mfrow=c(2,2)) 
+
+for (i in unique(samp$lenclass)) { 
+s1 <- which(samp$lenclass == i)
+map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GAMM model")
+points(samp$X[s1], samp$Y[s1], col=cols[round(samp$Ngam[s1]*100)+1], pch=15, cex=0.5)
+for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
+text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
+  text(-76.8, 27.6, "spawning female\nprobability of occurrence")  } 
 
 ################### compare GLMM vs GAMM predictions  ##########################
 par(mfrow=c(1,2)) 

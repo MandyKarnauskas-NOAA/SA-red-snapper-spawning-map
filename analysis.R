@@ -96,13 +96,14 @@ mis <- which(is.na(dat$TL))
 out <- lm(dat$TL ~ dat$FL)
 for (i in mis)  {  dat$TL[i] <- round(out$coef[1] + out$coef[2] * dat$FL[i])   }
 
-#dat$lenbins <- cut(dat$TL, seq(305, 905, 100))  
-#table(dat$lenbins, useNA="always")
-#tab <- as.data.frame.matrix(table(dat$PCG, dat$lenbins))
-#tab$PCG <- rownames(tab)
+dat$lenbins <- cut(dat$TL, breaks=c(300, 500, 600, 700, 905))  
+
+table(dat$lenbins, useNA="always")
+tab <- as.data.frame.matrix(table(dat$PCG, dat$lenbins))
+tab$PCG <- rownames(tab)
 
 dim(p)
-dim(tab)
+dim(tab)   
 dmerge <- merge(p, tab, by="PCG", all.x = T)
 dim(dmerge)
 names(dmerge)
@@ -190,12 +191,13 @@ table(d$angbins, d$mon)
 table(d$angbins, d$depbins)
 table(d$angbins, d$tempbins)
 table(d$depbins, d$tempbins)
-
                   
 round(tapply(d$N, list(d$angbins, d$mon), mean, na.rm=T), 3)  # month * latitude interaction can be done with fewer bins
 round(tapply(d$N, list(d$angbins, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction can be done with fewer bins
 round(tapply(d$N, list(d$angbin2, d$tempbins), mean, na.rm=T), 3)  # temp * latitude interaction can be done
 round(tapply(d$N, list(d$angbin2, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction can be done 
+round(tapply(d$N, list(d$lenclass, d$depbins), mean, na.rm=T), 3)   # depth * latitude interaction can be done 
+round(tapply(d$N, list(d$lenclass, d$angbins), mean, na.rm=T), 3)   # depth * latitude interaction can be done 
 barplot(tapply(d$N, list(d$angbin2, d$tempbins), mean, na.rm=T), beside=T, col=1:6)     # looks to be important
 barplot(tapply(d$N, list(d$angbin2, d$depbins), mean, na.rm=T), beside=T, col=1:6)
 matplot(tapply(d$N, list(d$angbin2, d$tempbins), mean, na.rm=T), type="l")         # interactions appear to be potentially important
@@ -206,14 +208,17 @@ barplot(tapply(d$N, list(d$lenclass, d$depbins), mean, na.rm=T), beside=T, col=1
 
 barplot(tapply(d$N, d$year, mean, na.rm=T))
 
-yrs0 <- as.numeric(names(which(tapply(d$N, d$year, mean, na.rm=T)>0)))        # take out years with no female data
-dim(d)
+d <- d[which(d$year==2010 | d$year==2011 | d$year==2012 | d$year==2013 | d$year==2014),]
+
+#yrs0 <- as.numeric(names(which(tapply(d$N, d$year, mean, na.rm=T)>0)))        # take out years with no female data
+#dim(d)
 #d <- d[which(d$year != 2006),];                                                 # take out 2006 - only one observation
-dim(d)
-d <- d[which(d$year %in% yrs0),]; dim(d)   
+#dim(d)
+#d <- d[which(d$year %in% yrs0),]; dim(d)   
 
 d$pres <- d$N
 d$pres[which(d$pres>1)] <- 1
+d$N[which(d$N==0)] <- NA
 
 #############################   GAM MODEL   ####################################
 
@@ -231,44 +236,44 @@ summary(gam1)
 par(mfrow=c(5,6), mex=0.5)
 plot(gam1)
 
-gam2 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(lunim) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam2 <- gam(pres ~ lenclass + s(dep) + s(ang) + s(doy) + s(lunim) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam2)
 plot(gam2)
 
-gam3 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(lunar) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam3 <- gam(pres ~ lenclass + s(dep) + s(ang) + s(doy) + s(lunar) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam3)                                                                   # lunar phase seems more parsimonious than illumination
 plot(gam3); plot.new()
 
-gam4 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam4 <- gam(pres ~ lenclass + s(dep) + s(ang) + s(doy) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam4)
 plot(gam4); plot.new()
 
-gam5 <- gam(fem ~ s(dep) + s(ang) + s(doy) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam5 <- gam(pres ~ lenclass + s(dep) + s(ang) + s(doy) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam5)
 plot(gam5)                                                                      # including temp appears to help doy fit more dome-shaped as would be expected
 
-gam6 <- gam(fem ~ te(dep, ang) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam6 <- gam(pres ~ lenclass + te(dep, ang) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam6)
 windows()
 plot(gam6)
 
-gam7 <- gam(fem ~ s(dep) + te(doy, ang) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam7 <- gam(pres ~ lenclass + s(dep) + te(doy, ang) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam7)
 plot(gam7)
 
-gam8 <- gam(fem ~ s(dep) + te(ang, temp) + s(doy) + s(lunar) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam8 <- gam(pres ~ lenclass + s(dep) + te(ang, temp) + s(doy) + s(lunar) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam8)
 plot(gam8)
 
-gam9 <- gam(fem ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam9 <- gam(pres ~ lenclass + s(dep) + s(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam9)                                                                   # highest deviance explained
 plot(gam9)
 
-gam10 <- gam(fem ~ te(dep, lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam10 <- gam(pres ~ lenclass + te(dep, lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam10)
 plot(gam10)
 
-gam11 <- gam(fem ~ ti(dep, lat) + ti(dep) + ti(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
+gam11 <- gam(pres ~ lenclass + ti(dep, lat) + ti(dep) + ti(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), family=binomial, data=d, method="REML")
 summary(gam11)
 plot(gam11)
 
@@ -343,8 +348,10 @@ x; colMeans(x)                        # total FPR + FNR = 0.5286315
 x <- xvalid(out4, d, kfold=5)
 colMeans(x, na.rm=T)                # GAM outperforms GLM
 
+
+#####################################  GLM  ####################################
 # mixed effects model - year as random effect
-out1 <- glmer(pres ~ lenclass + depbins + angbins + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
+out1 <- glm(pres ~ lenclass * depbins + angbins + mon + lun4 + tempbins + year,  family="binomial", data=d)
 summary(out1)                  
 extractAIC(out1) 
 
