@@ -10,7 +10,8 @@
 ################################################################################
 rm(list=ls())
 load("model_parameters.RData")
-load("model_data.RData")    
+load("model_data.RData")  
+source("plotSAmap.r")                                                           # plotting code  
 
 ################################  libraries  ###################################
 if (!"lme4" %in% installed.packages()) install.packages("lme4", repos='http://cran.us.r-project.org')
@@ -43,7 +44,7 @@ y <- v1$dim[[2]]$vals
 nc_close(nc)
 
 z[which(z>0)] <- 0
-image(x,y,z)                                                                    # plot bathymetry
+#image(x,y,z)                                                                    # plot bathymetry
 abline(h=min(d$lat)); abline(h=max(d$lat))                                      # check extent with respect to data limits
 
 c15<- contourLines(x,y,z, levels=c(-15))                                        # isobaths for 0, 15, 85m
@@ -92,90 +93,67 @@ cols <- rainbow(104)
 plot(samp$X, samp$Y, col=cols[samp$dep], pch=15, cex=0.5)                       # check assignment of depths
 
 #################   EXTRAPOLATE MODEL PREDICTIONS TO NEW GRID   ################
-gamf
-glmf
+gamPAfin
+gamNPfin
 
 #  add other required factors to prediction grid 
-dep2 <- samp$dep
-dep2[which(dep2 > 85)] <- 84                                                    # replace deeper values so that prediction bins match
-samp$depbins <- cut(dep2, breaks=c(10, 25, 30, 35, 40, 50, 60, 85))
-samp$latbins <- cut(samp$lat, breaks=seq(27.1, 35.1, 1))
-samp$mon <- as.factor(7)                                                        # encompasses mean doy 
-samp$lun4 <- "Full"                                                             # encompasses mean lunar phase
-samp$tempbins <- "(22,24]"                                                      # encompasses mean temp
-
 samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
 samp$lunar <- mean(d$lunar)                                                     
-samp$temp <- mean(d$temp, na.rm=T)
-samp$year <- 1997
-
-samp2 <- c()
-for (i in unique(d$lenclass))  { 
-    samp$lenclass <- i
-    samp2 <- rbind(samp2, samp)  }
-    
-samp <- samp2
-samp$lenclass
+samp$temp <- max(d$temp, na.rm=T)
+samp$year <- 2012
 
 ##########################   predict on new grid   #############################
-predglm <- predict  (glmf, samp, type="response") 
-predgam <- predict.gam(gamf, samp, type="response", se.fit=TRUE) 
 
-samp$Nglm <- predglm                                                            # add to matrix
-samp$Ngam <- predgam$fit
-samp$Ngamse <- predgam$se.fit
+comb.var <- function(A, Ase, P, Pse) { (P^2 * Ase^2 + A^2 * Pse^2 - Ase^2 * Pse^2)  }   # combined var function
 
-cols=rainbow(20, start=0.01, end=0.8)[20:1];  plot(1:100, col=cols, pch=20)   # choose colormap
-yloc <- seq(28, 32, length.out=100)                                             # compare results between GAM and GLM
+predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
+predpos <- predict.gam(gamNPfin, samp, type="response", se.fit=T)     #  predpos           = predicted abundance when present neg binomial 
+#        co <- as.numeric(cor(predlogit$fit, predpos$fit, method="pearson"))       # pearson correlation between prop positive and abundance when present
 
+samp$se <- comb.var(predpos$fit, predpos$se.fit, predlogit$fit, predlogit$se.fit)     # combined variance - (pred N when present, neg bin SE, prob of occ, logistic SE)
+samp$N <-  predlogit$fit * predpos$fit                                                  # estimated abundance is prob. of occurrence * estimated abundance when present
 
-par(mfrow=c(2,2)) 
-
-for (i in unique(samp$lenclass)) { 
-s1 <- which(samp$lenclass == i)
-map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GAMM model")
-points(samp$X[s1], samp$Y[s1], col=cols[round(samp$Ngam[s1]*100)+1], pch=15, cex=0.5)
-for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
-text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
-  text(-76.8, 27.6, "spawning female\nprobability of occurrence")  } 
+hist(predlogit$fit)
+hist(predpos$fit)
+hist(predlogit$se.fit)
+hist(predpos$se.fit)
 
 ################### compare GLMM vs GAMM predictions  ##########################
-par(mfrow=c(1,2)) 
-map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GAMM model")
-points(samp$X, samp$Y, col=cols[round(samp$Ngam*100)], pch=15, cex=0.5)
-for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
-text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
-  text(-76.8, 27.6, "spawning female\nprobability of occurrence")
+par(mfrow=c(1,3)) 
+
+plotSAmap(predlogit$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+text(-76.8, 27.6, "spawning female\nprobability of occurrence")
+
+plotSAmap(predpos$fit , samp$X, samp$Y, pchnum=15, cexnum=0.5)
+text(-76.8, 27.6, "spawning female\nabundance when present")
+
+plotSAmap(samp$N, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+text(-76.8, 27.6, "spawning female\nindex")
   
-map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GLMM model")
-points(samp$X, samp$Y, col=cols[round(samp$Nglm*100)], pch=15, cex=0.5)
-for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
-text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
-  text(-76.8, 27.6, "spawning female\nprobability of occurrence")
-  
+
 ###################    plot GAMM predictions and SE   ##########################
 par(mfrow=c(1,2)) 
-map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GAMM model")
-points(samp$X, samp$Y, col=cols[round(samp$Ngam*100)], pch=15, cex=0.5)
-for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
-text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
-  text(-76.8, 27.6, "spawning female\nprobability of occurrence")
-  
-map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); mtext(side=3, "RS spawning activity \n GLMM model S.E.")
-points(samp$X, samp$Y, col=cols[round(samp$Ngamse*100)], pch=15, cex=0.5)
-for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
-text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
+
+plotSAmap(predlogit$fit, samp$X, samp$Y, pchnum=15, cexnum=0.35)
+text(-76.8, 27.6, "spawning female\nprobability of occurrence")
+
+plotSAmap(predlogit$se.fit, samp$X, samp$Y, pchnum=15, cexnum=0.35)
+text(-76.8, 27.6, "model S.E.")
+
 
 ################  plot spawning activity by day of year  #######################
 par(mfrow=c(3,4), mex=0.6) 
 
+    yloc <- seq(28, 32, length.out=100)
+    cols <- rainbow(100, start=0.01, end=0.7)[100:1]
+    
 for (i in seq(min(d$doy), max(d$doy), length.out=12))  {
   samp$doy <- i                                                                   # loop through days of year
-  predgam <- predict.gam(gamf, samp, type="response", se.fit=TRUE) 
+  predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)      
 
   map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); 
   mtext(side=3, paste("RS spawning activity\nday", round(mean(samp$doy*365)), "of year"), cex=0.8)
-  points(samp$X, samp$Y, col=cols[round(predgam$fit*100)], pch=15, cex=0.5)
+  points(samp$X, samp$Y, col=cols[round(predlogit$fit*300)+1], pch=15, cex=0.5)
   for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
   text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
   text(-77.2, 27.6, "spawning female\nprobability of occurrence")  } 
@@ -189,11 +167,11 @@ n <- c("New", "Waxing", "Full", "Waning")
 
 for (i in 1:4)  {
   samp$lunar <- seq(0.5, 5, length.out=4)[i]                                    # loop through lunar phases
-  predgam <- predict.gam(gamf, samp, type="response", se.fit=TRUE) 
+  predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)    
 
   map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); 
   mtext(side=3, paste("RS spawning activity\n", n[i], "Moon"), cex=0.8)
-  points(samp$X, samp$Y, col=cols[round(predgam$fit*100)], pch=15, cex=0.5)
+  points(samp$X, samp$Y, col=cols[round(predlogit$fit*300)+1], pch=15, cex=0.5)
   for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
   text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)  
   text(-76.8, 27.6, "spawning female\nprobability of occurrence") } 
