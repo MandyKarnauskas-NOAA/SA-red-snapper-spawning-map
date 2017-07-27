@@ -1,7 +1,7 @@
 
 ###########################   MAPPING FUNCTION   ###############################
 plotSAmap <- function(x, lon, lat, pchnum, cexnum, cutof=NA, startzero=F)  {
-    pos <- c(0.005,  0.05, 0.1, 0.2, 0.5, 1, 2, 4, 5, 10, 50, 100, 500, 1000)
+    pos <- c(0.05, 0.1, 0.2, 0.5, 1, 2, 4, 5, 10, 50, 100, 500, 1000)
   if (startzero==F)  {a <- floor(min(x)) } else { a <- 0 }
   b <- max((x)-a)*1.03
   pind <- round((x-a)/b*100+1); print(min(pind)); print(max(pind))

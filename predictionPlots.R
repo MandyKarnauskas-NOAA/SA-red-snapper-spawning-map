@@ -94,52 +94,63 @@ plot(samp$X, samp$Y, col=cols[samp$dep], pch=15, cex=0.5)                       
 
 #################   EXTRAPOLATE MODEL PREDICTIONS TO NEW GRID   ################
 gamPAfin
-gamNPfin
+
+predmat <- c()
+predsemat <- c()
+#for (i in seq(min(d$lunar), max(d$lunar), length.out=4))  { 
+   for (j in seq(min(d$temp, na.rm=T), max(d$temp, na.rm=T), length.out=6))  {
+      for (k in unique(d$year))  {
+#        samp$doy <- i                                                         # add other factors to prediction grid                                                   
+        samp$temp <- j
+        samp$year <- k    
+    pred <- predict(gamPAfin, samp, type="response", se.fit=T)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
+    predmat   <- cbind(predmat, pred$fit)
+    predsemat <- cbind(predsemat, pred$se.fit)   } } # }
+      
+mp <- rowMeans(predmat)
+mv <- rowMeans(predsemat)        
+
+plot(data.frame(predmat[,1:12]))
+plot(data.frame(predmat[, seq(1, 60, 5)]))
+cor(data.frame(predmat[,1:12]))
+cor(data.frame(predmat[, seq(1:60)]))
 
 #  add other required factors to prediction grid 
 samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
 samp$lunar <- mean(d$lunar)                                                     
-samp$temp <- max(d$temp, na.rm=T)
+samp$temp <- mean(d$temp, na.rm=T)
 samp$year <- 2012
 
 ##########################   predict on new grid   #############################
+pred <- predict(gamPAfin, samp, type="response", se.fit=T)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
 
-comb.var <- function(A, Ase, P, Pse) { (P^2 * Ase^2 + A^2 * Pse^2 - Ase^2 * Pse^2)  }   # combined var function
+samp$se <- pred$se.fit
+samp$N <-  pred$se.fit   
+par(mfrow=c(2,2))                                             
+hist(pred$fit)
+hist(pred$se.fit)
 
-predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
-predpos <- predict.gam(gamNPfin, samp, type="response", se.fit=T)     #  predpos           = predicted abundance when present neg binomial 
-#        co <- as.numeric(cor(predlogit$fit, predpos$fit, method="pearson"))       # pearson correlation between prop positive and abundance when present
-
-samp$se <- comb.var(predpos$fit, predpos$se.fit, predlogit$fit, predlogit$se.fit)     # combined variance - (pred N when present, neg bin SE, prob of occ, logistic SE)
-samp$N <-  predlogit$fit * predpos$fit                                                  # estimated abundance is prob. of occurrence * estimated abundance when present
-
-hist(predlogit$fit)
-hist(predpos$fit)
-hist(predlogit$se.fit)
-hist(predpos$se.fit)
+plot(samp$N, mp)
+cor(samp$N, mp)
+plot(samp$se, mv)
+cor(samp$se, mv)
 
 ################### compare GLMM vs GAMM predictions  ##########################
-par(mfrow=c(1,3)) 
-
-plotSAmap(predlogit$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
-text(-76.8, 27.6, "spawning female\nprobability of occurrence")
-
-plotSAmap(predpos$fit , samp$X, samp$Y, pchnum=15, cexnum=0.5)
-text(-76.8, 27.6, "spawning female\nabundance when present")
+par(mfrow=c(1,2))
 
 plotSAmap(samp$N, samp$X, samp$Y, pchnum=15, cexnum=0.5)
-text(-76.8, 27.6, "spawning female\nindex")
-  
-
-###################    plot GAMM predictions and SE   ##########################
-par(mfrow=c(1,2)) 
-
-plotSAmap(predlogit$fit, samp$X, samp$Y, pchnum=15, cexnum=0.35)
 text(-76.8, 27.6, "spawning female\nprobability of occurrence")
 
-plotSAmap(predlogit$se.fit, samp$X, samp$Y, pchnum=15, cexnum=0.35)
-text(-76.8, 27.6, "model S.E.")
+plotSAmap(mp, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+text(-76.8, 27.6, "spawning female\nprobability of occurrence")
+  
+###################    plot GAMM predictions and SE   ##########################
+ 
+plotSAmap(mp, samp$X, samp$Y, pchnum=15, cexnum=0.35)
+text(-76.8, 27.6, "spawning female\nprobability of occurrence")
 
+plotSAmap(mv, samp$X, samp$Y, pchnum=15, cexnum=0.35)
+text(-76.8, 27.6, "model S.E.")
 
 ################  plot spawning activity by day of year  #######################
 par(mfrow=c(3,4), mex=0.6) 
@@ -180,5 +191,33 @@ for (i in 1:4)  {
 
 
 
+#  samp - predict on dep, lat
+#  loop through doy; use average temp for that month
+#  use average lunar phase (little effect)
+#  calculate for all years and average
 
-                                                                 
+
+su <- read.table("mandy_rs.csv", sep=",", header=T)
+
+su$doy <- NA                                                                     #  for GAM, can use continuous day of year instead of month
+dinmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+for (i in 1:nrow(su))  {  su$doy[i] <- (sum(dinmon[1:su$month[i]]) + su$day[i]) / 365  }
+su$lunar <- lunar.phase(as.Date(paste(su$year,"-",su$mon,"-",su$day,sep="")), name=F)  # also can use continuous lunar phase                                   
+su$temp <- mean(d$temp, na.rm=T)
+
+su$dep <- su$depth
+su$lat <- su$Latitude
+
+predsu <- predict(gamPAfin, su, type="response", se.fit=T) 
+
+su$pred <- predsu$fit        
+
+boxplot(su$pred ~ su$Reprophase)
+boxplot(su$pred ~ su$mature)
+boxplot(su$pred ~ su$activespawn)
+
+summary(lm(su$pred ~ su$Reprophase))
+summary(lm(su$pred ~ su$mature))
+summary(lm(su$pred ~ su$activespawn))
+
+
