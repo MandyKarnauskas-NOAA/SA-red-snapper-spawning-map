@@ -46,8 +46,8 @@ table(dat$Year)
 table(p$Year)
 
 table(dat$Year, dat$Mat)
-p <- p[which(p$Year < 2015 & p$Year > 2003),]
-dat <- dat[which(dat$Year < 2015 & dat$Year > 2003),]
+p <- p[which(p$Year < 2015 & p$Year > 2003),]                                   # use years 2004 - 2014!!!!!!!!!!!!!!!
+dat <- dat[which(dat$Year < 2015 & dat$Year > 2003),]                           # use years 2004 - 2014!!!!!!!!!!!!!!!
 table(dat$Year)
 table(p$Year)
 names(table(dat$Year)) == names(table(p$Year))
@@ -181,7 +181,7 @@ d$SF
 d$pres <- d$SF                                                                  # model catch of spawning females in delta-GAM
 d$pres[which(d$pres>1)] <- 1
 d$SF[which(d$SF==0)] <- NA
-d$SF
+#d$SF
 
 #############################   GAM MODEL   ####################################
 
@@ -312,17 +312,17 @@ drmna <- d[which(!is.na(d$temp)),]
 dlast5 <- drmna[which(drmna$year==2010 | drmna$year==2011 | drmna$year==2012 | drmna$year==2013 | drmna$year==2014),]
 
 par(mfrow=c(5,6), mex=0.5)
-x <- xvalid(gam1, drmna, kfold=5)
+x <- xvalid(gam1, drmna, kfold=5)      # total FPR + FNR = 0.4933012
 x; colMeans(x)     
 
 x <- xvalid(gam9, drmna, kfold=5)       # gam9 outperforms other gam models
-x; colMeans(x)                      # total FPR + FNR = 0.5382341
+x; colMeans(x)                      # total FPR + FNR = 0.4301723
 
 x <- xvalid(gamopt, drmna, kfold=5)     # smoothing optimizer does not really improve performance
-x; colMeans(x)                      # total FPR + FNR = 0.5480571
+x; colMeans(x)                      # total FPR + FNR = 0.4622951
 
 x <- xvalid(gam9, dlast5, kfold=5)  # using older data does not seem to reduce performance
-x; colMeans(x)                        # total FPR + FNR = 0.5286315
+x; colMeans(x)                        # total FPR + FNR = 0.4850022
 
 # mixed effects model - year as random effect
 out2 <- glmer(pres ~ depbins + latbins + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
@@ -330,7 +330,7 @@ out2 <- glm(pres ~ depbins + latbins + mon + lun4 + tempbins + year,  family="bi
 summary(out2)                  
 extractAIC(out2)
 
-x <- xvalid(out2, drmna, kfold=5)
+x <- xvalid(out2, drmna, kfold=5)    # total FPR + FNR = 0.5201849
 colMeans(x, na.rm=T)                # GAM outperforms GLM
 
 ################################################################################
