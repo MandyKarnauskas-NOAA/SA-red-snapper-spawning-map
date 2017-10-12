@@ -278,6 +278,38 @@ plot(gamm1$gam)
 
 gamPAfin <- gam9
 
+d04 <- d[which(d$year==2004),]
+d08 <- d[which(d$year==2008),]
+d09 <- d[which(d$year==2009),]
+d10 <- d[which(d$year==2010),]
+d11 <- d[which(d$year==2011),]
+d12 <- d[which(d$year==2012),]
+d13 <- d[which(d$year==2013),]
+d14 <- d[which(d$year==2014),]
+
+g04 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d04, method="REML")
+g08 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d08, method="REML")
+g09 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d09, method="REML")
+g10 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d10, method="REML")
+
+g11 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d12, method="REML")
+g12 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d12, method="REML")
+g13 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d13, method="REML")
+g14 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d14, method="REML")
+
+par(mfrow=c(4,5))
+
+summary(g04); plot(g04)      
+summary(g08); plot(g08)      
+summary(g09); plot(g09) 
+summary(g10); plot(g10) 
+
+summary(g11); plot(g11)      
+summary(g12); plot(g12)      
+summary(g13); plot(g13) 
+summary(g14); plot(g14) 
+
+
 ##############   optimize smoothing parameter for best GAM model  ##############
 sp <- gam9$sp
 tuning.scale <- c(1e-5,1e-4,1e-3,1e-2,1e-1,1e0,1e1,1e2,1e3,1e4,1e5)

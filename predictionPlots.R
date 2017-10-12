@@ -125,13 +125,34 @@ cor(data.frame(predmat[, seq(1:60)]))
 samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
 samp$lunar <- mean(d$lunar)                                                     
 samp$temp <- mean(d$temp, na.rm=T)
-samp$year <- 2004
+samp$year <- 2010
+
+p08 <- predict(g08, samp, type="response", se.fit=T)
+p10 <- predict(g10, samp, type="response", se.fit=T)
+p11 <- predict(g11, samp, type="response", se.fit=T)
+p12 <- predict(g12, samp, type="response", se.fit=T)
+p13 <- predict(g13, samp, type="response", se.fit=T)
+p14 <- predict(g14, samp, type="response", se.fit=T)
+
+par(mfrow=c(2,3), mex=0.6)
+plotSAmap(p08$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2008")
+plotSAmap(p10$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2010")
+plotSAmap(p11$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2011")
+plotSAmap(p12$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2012")
+plotSAmap(p13$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2013")
+plotSAmap(p14$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2014")
 
 ##########################   predict on new grid   #############################
 pred <- predict(gamPAfin, samp, type="response", se.fit=T)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
 
 samp$se <- pred$se.fit
-samp$N <-  pred$se.fit   
+samp$N <-  pred$fit   
 par(mfrow=c(2,2))                                             
 hist(pred$fit)
 hist(pred$se.fit)
@@ -240,9 +261,14 @@ boxplot(su$pred ~ su$mature)
 t.test(su$pred ~ su$mature)
 wilcox.test(su$pred ~ su$mature)
 
-boxplot(su$pred ~ su$activespawn)
+par(mgp=c(3,1,0))
+boxplot(su$pred ~ su$activespawn, axes=F, ylab="predicted index of spawning activity", notch=T)
+axis(2, las=2)
+par(mgp=c(0,2,0))
+axis(1, at=1:2, lab=c("actively \nspawning (1)", "not actively \nspawning (2)")); box()
 t.test(su$pred ~ su$activespawn)
 wilcox.test(su$pred ~ su$activespawn)
+text(1.5, 0.43, "difference \nbetween means: \nP < 0.001")
 
 # Repro phases are: 
 # 1=immature 
