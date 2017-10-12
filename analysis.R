@@ -84,14 +84,14 @@ table(dat$Inc)
 table(dat$Mat, dat$Year)
  
 matcodes <- c(3, 7, "B", "C", "D", "G", "H")                                    # considered "spawning females" -- see Excel tab 2 in data sheet
-dat$fem <- "M"
-dat$fem[which(dat$Sex==2)] <- "NF"
-dat$fem[which(dat$Mat %in% matcodes & dat$Sex==2)] <- "SF"
+dat$fem <- "M"                                                                  # M =  male
+dat$fem[which(dat$Sex==2)] <- "NF"                                              # NF = non-spawning female
+dat$fem[which(dat$Mat %in% matcodes & dat$Sex==2)] <- "SF"                      # SF = spawning female
 table(dat$fem, useNA="always")
 table(dat$fem, dat$Mat, dat$Sex, useNA="always")
 dim(dat)
 
-mis <- which(is.na(dat$TL))
+mis <- which(is.na(dat$TL)); mis
 out <- lm(dat$TL ~ dat$FL)
 for (i in mis)  {  dat$TL[i] <- round(out$coef[1] + out$coef[2] * dat$FL[i])   }
 
@@ -124,8 +124,13 @@ summary(g)
 plot(g)                                # trend more important with latitude
 
 #################  merge maturity categories with site database  ###############
+
+dat$BF <- 3.012*10^(-8) * dat$TL^4.775    #  with TL in mm - from K. Shertzer email - used in last SEDAR
+dat$BF[which(dat$fem !="SF")] <- 0
+
 tab <- as.data.frame.matrix(table(dat$PCG, dat$fem))
 tab$PCG <- rownames(tab)
+tab$eggs <- tapply(dat$BF, dat$PCG, sum)
 
 dim(p)
 dim(tab)   
@@ -145,9 +150,11 @@ d <- dmerge
 d$M[which(is.na(d$M))] <- 0
 d$NF[which(is.na(d$NF))] <- 0
 d$SF[which(is.na(d$SF))] <- 0
+d$eggs[which(is.na(d$eggs))] <- 0
   
 map('usa', xlim=c(-82, -75), ylim=c(26, 36))                                            
 points(d$lon, d$lat, cex=(d$abundance+1)/3)                                         # view locations of mature females
+points(d$lon, d$lat, cex=d$eggs/300000, col=3) 
 
 tapply(d$M, d$year, sum)
 tapply(d$NF, d$year, sum)
@@ -177,11 +184,14 @@ d$tempbins <- cut(d$temp, breaks=c(10, 20, 22, 24, 30))
 d$latbins <- cut(d$lat, breaks=seq(27.1, 35.1, 1))
 
 ################  convert to presence - absence 
-d$SF
-d$pres <- d$SF                                                                  # model catch of spawning females in delta-GAM
+d$eggs
+d$pres <- d$eggs                                                                # model catch of spawning females (expressed as eggs) in delta-GAM
 d$pres[which(d$pres>1)] <- 1
-d$SF[which(d$SF==0)] <- NA
+d$eggs[which(d$eggs==0)] <- NA
 #d$SF
+
+hist(d$eggs)
+hist(log(d$eggs))
 
 #############################   GAM MODEL   ####################################
 
@@ -373,11 +383,173 @@ outnull <- gam(pres ~ 1, family=binomial, data=d, method="REML")
 outnorand <- gam(pres ~ 1 + s(year, bs="re"), family=binomial, data=d, method="REML")
 (deviance(outnorand)-deviance(gam9))/deviance(outnorand)  # deviance explained by fixed factors combined
 
+
+######################    model abundance when present   #######################
+
+#  FACTORS:  year   mon     depbins    tempbins    lunar     angbins           
+#                   doy     dep        temp        lunim     ang
+#                                                            lat
+
+##########################    model presence/absence   #########################
+gam1 <- gam(log(eggs) ~ s(dep) + s(ang) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam1)
+par(mfrow=c(5,6), mex=0.5)
+plot(gam1)
+
+gam2 <- gam(log(eggs) ~  s(dep) + s(ang) + s(doy) + s(lunim) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam2)                                                                   # lunar illumination not significant
+plot(gam2)
+
+gam3 <- gam(log(eggs) ~ s(dep) + s(ang) + s(doy) + s(lunar) + s(year, bs="re"), data=d, method="REML")
+summary(gam3)                                                                   # lunar phase not significant here
+plot(gam3); plot.new()
+
+gam4 <- gam(log(eggs) ~ s(dep) + s(ang) + s(doy) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam4)
+plot(gam4); plot.new()
+
+gam5 <- gam(log(eggs) ~ s(dep) + s(ang) + s(doy) + s(year, bs="re"), data=d, method="REML")
+summary(gam5)
+plot(gam5)                                                                      # including temp appears to help doy fit more dome-shaped as would be expected
+
+gam6 <- gam(log(eggs) ~ te(dep, ang) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam6)                                                                   # much lower deviance
+#windows()
+plot(gam6)
+
+gam7 <- gam(log(eggs) ~ s(dep) + te(doy, ang) + s(lunar) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam7)
+plot(gam7)
+
+gam8 <- gam(log(eggs) ~ s(dep) + te(ang, temp) + s(doy) + s(lunar) + s(year, bs="re"), data=d, method="REML")
+summary(gam8)                                                                   # also lower deviance
+plot(gam8)
+
+gam9 <- gam(log(eggs) ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam9)                                                                   # highest deviance explained
+plot(gam9)      
+acf(resid(gam9)) 
+plot(residuals(gam9))   
+
+gam9a <- gam(log(eggs) ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), correlation = corAR1(form=~year), data=d, method="REML")
+summary(gam9a)                                                                   # highest deviance explained
+plot(gam9a)                                                                      # lunar not significant
+acf(resid(gam9a)) 
+plot(residuals(gam9a))   
+                                                             
+gam9b <- gam(log(eggs) ~ s(dep) + s(lat) + s(doy) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam9b)                                                                   # highest deviance explained
+plot(gam9b)
+
+gam10 <- gam(log(eggs) ~ te(dep, lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam10)
+plot(gam10)
+
+gam11 <- gam(log(eggs) ~ ti(dep, lat) + ti(dep) + ti(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), data=d, method="REML")
+summary(gam11)
+plot(gam11)
+
+extractAIC(gam1)
+extractAIC(gam2)
+extractAIC(gam3)
+extractAIC(gam4)
+extractAIC(gam5)
+extractAIC(gam6)
+extractAIC(gam7)
+extractAIC(gam8)
+extractAIC(gam9)                                                                #  gam9 is best model by AIC and deviance explained 
+extractAIC(gam10)
+extractAIC(gam11)
+
+min(cbind(extractAIC(gam1), extractAIC(gam2), extractAIC(gam3), extractAIC(gam4), extractAIC(gam5), extractAIC(gam6), extractAIC(gam7), extractAIC(gam8), extractAIC(gam9), extractAIC(gam10), extractAIC(gam11))[2,])
+plot(cbind(extractAIC(gam1), extractAIC(gam2), extractAIC(gam3), extractAIC(gam4), extractAIC(gam5), extractAIC(gam6), extractAIC(gam7), extractAIC(gam8), extractAIC(gam9), extractAIC(gam10), extractAIC(gam11))[2,], ylab="")
+
+gamNfin <- gam9
+
+#  compare to GAMM package 
+gamm1 <- gamm(log(eggs) ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), random=list(year=~1), data=d)       # does not converge
+summary(gam9)                                                                   
+summary(gamm1$gam)
+par(mfrow=c(2,6), mex=0.5)                                                      # parameter estimates are similar 
+plot(gam9)
+plot(gamm1$gam)
+
+##############   optimize smoothing parameter for best GAM model  ##############
+sp <- gam9$sp
+tuning.scale <- c(1e-5,1e-4,1e-3,1e-2,1e-1,1e0,1e1,1e2,1e3,1e4,1e5)
+scale.exponent <- log10(tuning.scale)
+n.tuning <- length(tuning.scale)
+edf   <- rep(NA,n.tuning)
+mn2ll <- rep(NA,n.tuning)
+aic   <- rep(NA,n.tuning)
+bic   <- rep(NA,n.tuning)
+
+for (i in 1:n.tuning) {
+gamobj <- gam(log(eggs) ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), data=d, method="REML", 
+          sp=tuning.scale[i]*sp)
+mn2ll[i] <- -2*logLik(gamobj)
+edf[i] <- sum(gamobj$edf) + 1
+aic[i] <- AIC(gamobj)
+bic[i] <- BIC(gamobj)   }
+par(mfrow=c(2,2))
+plot(scale.exponent, mn2ll, type="b", main="-2 log likelihood")
+plot(scale.exponent, edf, ylim=c(0,70), type="b", main="effective number of parameters")
+plot(scale.exponent, aic, type="b", main="AIC")
+plot(scale.exponent, bic, type="b", main="BIC")
+opt.sp <- tuning.scale[which.min(bic)] * sp
+
+gamopt <- gam(log(eggs) ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp) + s(year, bs="re"), data=d, method="REML", sp=opt.sp)
+summary(gamopt)             # does not seem to improve fit
+plot(gamopt)
+
+# mixed effects model - year as random effect
+out2 <- lmer(log(eggs) ~ depbins + latbins + mon + lun4 + tempbins + (1|year), data=d)
+#out2 <- glm(log(eggs) ~ depbins + latbins + mon + lun4 + tempbins + year, data=d)
+summary(out2)                  
+extractAIC(out2)
+
+outnull <- gam(log(eggs) ~ 1, data=d, method="REML")
+(deviance(outnull)-deviance(gam9))/deviance(outnull)      # deviance explained by all factors combined
+
+outnorand <- gam(log(eggs) ~ 1 + s(year, bs="re"), data=d, method="REML")
+(deviance(outnorand)-deviance(gam9))/deviance(outnorand)  # deviance explained by fixed factors combined
+
 #############################  END MODELING  ###################################
+
+####################  LOOK AT STATISTICAL MODEL PREDICTIONS  ###################
+
+#############################   functions   ####################################
+comb.var   <- function(A, Ase, P, Pse, p) { (P^2 * Ase^2 + A^2 * Pse^2 + 2 * p * A * P * Ase * Pse)  }   # combined variance function
+lnorm.mean <- function(x1, x1e) {  exp(x1 + 0.5 * x1e^2)   }
+lnorm.se   <- function(x1, x1e) {  ((exp(x1e^2)-1)*exp(2 * x1 + x1e^2))^0.5  }   
+################################################################################
+
+dd <- d[which(d$year != 2004),]
+dd <- dd[which(!is.na(dd$temp)),]
+
+predlogit <- predict(gamPAfin, dd, type="response", se.fit=T)     # predict occurrences 
+predposlog <- predict(gamNfin, dd, type="response", se.fit=T)     # predict eggs when present   
+
+predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)        # convert lognormal mean and SE to normal space
+predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
+
+co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))                 # calculate covariance 
+predvar <- comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co)    # calculate combined variance
+predind <-  predlogit$fit * predpos                                             # estimated abundance is prob. of occurrence * estimated abundance when present
+
+plot(dd$eggs, predpos)
+
+dd$eggs[which(is.na(dd$eggs))] <- 0
+
+plot(predind, dd$eggs)
+cor(predind, dd$eggs)
+qqplot(predind, dd$eggs)
+
+dd$eggs[which.max(dd$eggs)] <- NA
 
 ##########################  SAVE MODEL OUTPUTS  ################################
 
-save("gamPAfin", file="model_parameters.RData")                             # save final model results
+save("gamPAfin", "gamNfin", file="model_parameters.RData")                             # save final model results
 save("d", file="model_data.RData")   
 
 ##################################  END  #######################################

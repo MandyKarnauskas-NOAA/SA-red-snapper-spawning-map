@@ -101,6 +101,23 @@ samp$lunar <- mean(d$lunar)
 samp$temp <- mean(d$temp, na.rm=T)
 samp$year <- 2009
 
+######################################  functions   #############################################
+comb.var   <- function(A, Ase, P, Pse, p) { (P^2 * Ase^2 + A^2 * Pse^2 + 2 * p * A * P * Ase * Pse)  }   # combined variance function
+lnorm.mean <- function(x1, x1e) {  exp(x1 + 0.5 * x1e^2)   }
+lnorm.se   <- function(x1, x1e) {  ((exp(x1e^2)-1)*exp(2 * x1 + x1e^2))^0.5  } 
+#################################################################################################
+
+predlogit <- predict(gamPAfin, dd, type="response", se.fit=T)     # predict occurrences 
+predposlog <- predict(gamNfin, dd, type="response", se.fit=T)     # predict eggs when present   
+
+predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)        # convert lognormal mean and SE to normal space
+predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
+
+co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))                 # calculate covariance 
+predvar <- comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co)    # calculate combined variance
+predind <-  predlogit$fit * predpos     
+
+
 predmat <- c()
 predsemat <- c()
 #for (i in seq(min(d$lunar), max(d$lunar), length.out=4))  { 
