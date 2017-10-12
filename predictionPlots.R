@@ -94,6 +94,7 @@ plot(samp$X, samp$Y, col=cols[samp$dep], pch=15, cex=0.5)                       
 
 #################   EXTRAPOLATE MODEL PREDICTIONS TO NEW GRID   ################
 gamPAfin
+gamNfin
 
 #  add other required factors to prediction grid 
 samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
@@ -107,28 +108,25 @@ lnorm.mean <- function(x1, x1e) {  exp(x1 + 0.5 * x1e^2)   }
 lnorm.se   <- function(x1, x1e) {  ((exp(x1e^2)-1)*exp(2 * x1 + x1e^2))^0.5  } 
 #################################################################################################
 
-predlogit <- predict(gamPAfin, dd, type="response", se.fit=T)     # predict occurrences 
-predposlog <- predict(gamNfin, dd, type="response", se.fit=T)     # predict eggs when present   
-
-predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)        # convert lognormal mean and SE to normal space
-predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
-
-co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))                 # calculate covariance 
-predvar <- comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co)    # calculate combined variance
-predind <-  predlogit$fit * predpos     
-
-
 predmat <- c()
 predsemat <- c()
 #for (i in seq(min(d$lunar), max(d$lunar), length.out=4))  { 
    for (j in seq(min(d$temp, na.rm=T), max(d$temp, na.rm=T), length.out=6))  {
-      for (k in unique(d$year))  {
-#        samp$doy <- i                                                         # add other factors to prediction grid                                                   
+      for (k in unique(d$year)[2:11])  {
+#        samp$doy <- i                                                          # add other factors to prediction grid                                                   
         samp$temp <- j
         samp$year <- k    
-    pred <- predict(gamPAfin, samp, type="response", se.fit=T)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
-    predmat   <- cbind(predmat, pred$fit)
-    predsemat <- cbind(predsemat, pred$se.fit)   } } # }
+        
+        predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)           # predict occurrences 
+        predposlog <- predict(gamNfin, samp, type="response", se.fit=T)           # predict eggs when present   
+        predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)              # convert lognormal mean and SE to normal space
+        predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
+        co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))                 # calculate covariance 
+        predse <- (comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co))^0.5    # calculate combined variance
+        predind <-  predlogit$fit * predpos                                             # calculate combined index
+
+    predmat   <- cbind(predmat, predind)
+    predsemat <- cbind(predsemat, predse)   } } # }
       
 mp <- rowMeans(predmat)
 mv <- rowMeans(predsemat)        
@@ -166,10 +164,16 @@ plotSAmap(p14$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
 mtext(side=3, "2014")
 
 ##########################   predict on new grid   #############################
-pred <- predict(gamPAfin, samp, type="response", se.fit=T)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
-
-samp$se <- pred$se.fit
-samp$N <-  pred$fit   
+predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)           # predict occurrences 
+predposlog <- predict(gamNfin, samp, type="response", se.fit=T)           # predict eggs when present   
+predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)              # convert lognormal mean and SE to normal space
+predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
+co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))                 # calculate covariance 
+predse <- (comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co))^0.5    # calculate combined variance
+predind <-  predlogit$fit * predpos                                             # calculate combined index
+        
+samp$se <- predse
+samp$N <-  predind   
 par(mfrow=c(2,2))                                             
 hist(pred$fit)
 hist(pred$se.fit)
@@ -182,18 +186,19 @@ cor(samp$se, mv)
 ################### compare GLMM vs GAMM predictions  ##########################
 par(mfrow=c(1,2))
 
-plotSAmap(samp$N, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+plotSAmap(samp$N/100000, samp$X, samp$Y, pchnum=15, cexnum=0.5)
 text(-76.8, 27.6, "spawning female\nprobability of occurrence")
 
-plotSAmap(mp, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+plotSAmap(mp/100000, samp$X, samp$Y, pchnum=15, cexnum=0.5)
 text(-76.8, 27.6, "spawning female\nprobability of occurrence")
   
 ###################    plot GAMM predictions and SE   ##########################
+par(mfrow=c(1,2))
  
-plotSAmap(mp, samp$X, samp$Y, pchnum=15, cexnum=0.35)
-text(-76.8, 27.6, "spawning female\nprobability of occurrence")
+plotSAmap(mp/100000, samp$X, samp$Y, pchnum=15, cexnum=0.35)
+text(-76.8, 27.6, "total red snapper\negg production")
 
-plotSAmap(mv, samp$X, samp$Y, pchnum=15, cexnum=0.35)
+plotSAmap(mv/100000, samp$X, samp$Y, pchnum=15, cexnum=0.35)
 text(-76.8, 27.6, "model S.E.")
 
 ################  plot spawning activity by day of year  #######################
