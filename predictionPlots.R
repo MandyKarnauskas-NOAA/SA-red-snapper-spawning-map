@@ -95,6 +95,12 @@ plot(samp$X, samp$Y, col=cols[samp$dep], pch=15, cex=0.5)                       
 #################   EXTRAPOLATE MODEL PREDICTIONS TO NEW GRID   ################
 gamPAfin
 
+#  add other required factors to prediction grid 
+samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
+samp$lunar <- mean(d$lunar)                                                     
+samp$temp <- mean(d$temp, na.rm=T)
+samp$year <- 2009
+
 predmat <- c()
 predsemat <- c()
 #for (i in seq(min(d$lunar), max(d$lunar), length.out=4))  { 
@@ -119,13 +125,34 @@ cor(data.frame(predmat[, seq(1:60)]))
 samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
 samp$lunar <- mean(d$lunar)                                                     
 samp$temp <- mean(d$temp, na.rm=T)
-samp$year <- 2012
+samp$year <- 2010
+
+p08 <- predict(g08, samp, type="response", se.fit=T)
+p10 <- predict(g10, samp, type="response", se.fit=T)
+p11 <- predict(g11, samp, type="response", se.fit=T)
+p12 <- predict(g12, samp, type="response", se.fit=T)
+p13 <- predict(g13, samp, type="response", se.fit=T)
+p14 <- predict(g14, samp, type="response", se.fit=T)
+
+par(mfrow=c(2,3), mex=0.6)
+plotSAmap(p08$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2008")
+plotSAmap(p10$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2010")
+plotSAmap(p11$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2011")
+plotSAmap(p12$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2012")
+plotSAmap(p13$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2013")
+plotSAmap(p14$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+mtext(side=3, "2014")
 
 ##########################   predict on new grid   #############################
 pred <- predict(gamPAfin, samp, type="response", se.fit=T)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
 
 samp$se <- pred$se.fit
-samp$N <-  pred$se.fit   
+samp$N <-  pred$fit   
 par(mfrow=c(2,2))                                             
 hist(pred$fit)
 hist(pred$se.fit)
@@ -187,37 +214,127 @@ for (i in 1:4)  {
   text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)  
   text(-76.8, 27.6, "spawning female\nprobability of occurrence") } 
 
+###############################  END PLOTS  ####################################
+
+########################   groundtruthing with Sue dataset  ####################
+
+d1 <- d[which(d$year == 2012),]       # use year specific to Sue data b/c year effects strong
+# rerun GAM for 2012 only
+gam9 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d1, method="REML")
+plot(gam9)
+
+su <- read.table("mandy_rs.csv", sep=",", header=T)        # Sue data
+                                                           # add necessary factors
+su$doy <- NA                                                                    #  for GAM, can use continuous day of year instead of month
+dinmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+for (i in 1:nrow(su))  {  su$doy[i] <- (sum(dinmon[1:su$month[i]]) + su$day[i]) / 365  }
+su$lunar <- lunar.phase(as.Date(paste(su$year,"-",su$mon,"-",su$day,sep="")), name=F)  # also can use continuous lunar phase                                   
+out <- gam(temp ~ s(doy), data=d1)
+plot(out)
+su$temp <- predict(out, su, se.fit=F)
+points(su$doy, scale(su$temp))
+su$dep <- su$depth
+su$lat <- su$Latitude
+
+predsu <- predict(gam9, su, type="response", se.fit=T) 
+su$pred <- predsu$fit        
+
+su$Reprophase <- as.factor(su$Reprophase)
+su$mature <- as.factor(su$mature)
+su$activespawn <- as.factor(su$activespawn)
+
+labs <- c("immature", "developing", "spawning\ncapable", "actively\nspawning", "regressing", "regenerating")
+boxplot(su$pred ~ su$Reprophase, names=labs, las=1, tck=0)
+summary(lm(su$pred ~ su$Reprophase))
+
+plot(as.numeric(su$Reprophase), su$pred, axes=F); axis(1, at=1:6, lab=labs); axis(2); box()
+abline(h=mean(range(su$pred)), col=2, lwd=2)
+
+su$phase <- "nospawn"
+su$phase[which(su$Reprophase==3 | su$Reprophase==4)] <- "spawn"
+                               
+boxplot(su$pred ~ su$phase)
+t.test(su$pred ~ su$phase)
+wilcox.test(su$pred ~ su$phase)
+
+boxplot(su$pred ~ su$mature)
+t.test(su$pred ~ su$mature)
+wilcox.test(su$pred ~ su$mature)
+
+par(mgp=c(3,1,0))
+boxplot(su$pred ~ su$activespawn, axes=F, ylab="predicted index of spawning activity", notch=T)
+axis(2, las=2)
+par(mgp=c(0,2,0))
+axis(1, at=1:2, lab=c("actively \nspawning (1)", "not actively \nspawning (2)")); box()
+t.test(su$pred ~ su$activespawn)
+wilcox.test(su$pred ~ su$activespawn)
+text(1.5, 0.43, "difference \nbetween means: \nP < 0.001")
+
+# Repro phases are: 
+# 1=immature 
+# 2=developing (just beginning to develop for the season, not yet capable of spawning) 
+# 3=spawning capable
+# 4=actively spawning
+# 5=regressing (shutting down for the season) 
+# 6=regenerating
+
+# If a fish is mature it is given a 2, if it is actively spawning (within 2 h) it is given a 1
+
+lat <- tapply(su$Latitude, su$Reference, mean)
+lon <- tapply(su$Longitude, su$Reference, mean)
+
+f <- data.frame(cbind(table(su$Reference, su$phase), lon, lat))
+
+f$prspawn <- f$spawn/(f$nospawn + f$spawn)
+f$dep <- tapply(su$dep, su$Reference, mean)
+f$doy <- tapply(su$doy, su$Reference, mean)
+f$lunar <- tapply(su$lunar, su$Reference, mean)
+f$N <- f$nospawn + f$spawn
+
+points(f$lon, f$lat, cex=f$prspawn)
+
+su$bin <- as.numeric(as.factor(su$phase)) - 1
+
+gamsu <- gam(cbind(spawn, N) ~ s(dep) + s(lat) + s(doy) + s(lunar), family=binomial, data=f, method="REML")
+plot(gamsu)
+
+
 ####################################  END  #####################################
 
-
-
+#  for CMS file:  
 #  samp - predict on dep, lat
 #  loop through doy; use average temp for that month
 #  use average lunar phase (little effect)
 #  calculate for all years and average
 
+f <- gam (temp ~ s(doy), data=d)
+plot(f)
+doy <- seq(min(d$doy), max(d$doy), length.out=32)
+diff(doy*365)
+temps <- predict(f, data.frame(doy))
+plot(doy, temps)
 
-su <- read.table("mandy_rs.csv", sep=",", header=T)
+sampold <- samp
+#  add other required factors to prediction grid 
+samp <- data.frame(cbind(sampold$lon, sampold$lat, samp$dep))
+names(samp) <- c("lon", "lat", "dep")
+samp$lunar <- mean(d$lunar)                                                     
 
-su$doy <- NA                                                                     #  for GAM, can use continuous day of year instead of month
-dinmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-for (i in 1:nrow(su))  {  su$doy[i] <- (sum(dinmon[1:su$month[i]]) + su$day[i]) / 365  }
-su$lunar <- lunar.phase(as.Date(paste(su$year,"-",su$mon,"-",su$day,sep="")), name=F)  # also can use continuous lunar phase                                   
-su$temp <- mean(d$temp, na.rm=T)
-
-su$dep <- su$depth
-su$lat <- su$Latitude
-
-predsu <- predict(gamPAfin, su, type="response", se.fit=T) 
-
-su$pred <- predsu$fit        
-
-boxplot(su$pred ~ su$Reprophase)
-boxplot(su$pred ~ su$mature)
-boxplot(su$pred ~ su$activespawn)
-
-summary(lm(su$pred ~ su$Reprophase))
-summary(lm(su$pred ~ su$mature))
-summary(lm(su$pred ~ su$activespawn))
-
-
+windows()
+par(mfrow=c(6,6))
+for (j in 1:length(doy))  {
+        predmat <- c()
+        predsemat <- c()                                                                                         
+        samp$temp <- temps[j]
+        samp$doy <- doy[j]
+   for (k in unique(d$year))  {
+        samp$year <- k    
+        pred <- predict(gamPAfin, samp, type="response", se.fit=F)       #  predlogit$fit     = predicted occurrences in probability space; predlogit$se.fit  = predicted SE in probability space
+        predmat   <- cbind(predmat, pred)
+#        predsemat <- cbind(predsemat, pred$se.fit)   
+        } 
+  mp <- rowMeans(predmat)
+#  mv <- rowMeans(predsemat) 
+  plotSAmap(mp*10, samp$lon, samp$lat, pchnum=15, cexnum=0.35)
+  mtext(side=3, paste("RS spawning activity\nday", round(mean(doy[j]*365)), "of year"), cex=0.8)
+    } 

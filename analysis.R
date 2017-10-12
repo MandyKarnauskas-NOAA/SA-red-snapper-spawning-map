@@ -46,8 +46,8 @@ table(dat$Year)
 table(p$Year)
 
 table(dat$Year, dat$Mat)
-p <- p[which(p$Year < 2015 & p$Year > 2003),]
-dat <- dat[which(dat$Year < 2015 & dat$Year > 2003),]
+p <- p[which(p$Year < 2015 & p$Year > 2003),]                                   # use years 2004 - 2014!!!!!!!!!!!!!!!
+dat <- dat[which(dat$Year < 2015 & dat$Year > 2003),]                           # use years 2004 - 2014!!!!!!!!!!!!!!!
 table(dat$Year)
 table(p$Year)
 names(table(dat$Year)) == names(table(p$Year))
@@ -181,7 +181,7 @@ d$SF
 d$pres <- d$SF                                                                  # model catch of spawning females in delta-GAM
 d$pres[which(d$pres>1)] <- 1
 d$SF[which(d$SF==0)] <- NA
-d$SF
+#d$SF
 
 #############################   GAM MODEL   ####################################
 
@@ -278,6 +278,38 @@ plot(gamm1$gam)
 
 gamPAfin <- gam9
 
+d04 <- d[which(d$year==2004),]
+d08 <- d[which(d$year==2008),]
+d09 <- d[which(d$year==2009),]
+d10 <- d[which(d$year==2010),]
+d11 <- d[which(d$year==2011),]
+d12 <- d[which(d$year==2012),]
+d13 <- d[which(d$year==2013),]
+d14 <- d[which(d$year==2014),]
+
+g04 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d04, method="REML")
+g08 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d08, method="REML")
+g09 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d09, method="REML")
+g10 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d10, method="REML")
+
+g11 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d12, method="REML")
+g12 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d12, method="REML")
+g13 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d13, method="REML")
+g14 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d14, method="REML")
+
+par(mfrow=c(4,5))
+
+summary(g04); plot(g04)      
+summary(g08); plot(g08)      
+summary(g09); plot(g09) 
+summary(g10); plot(g10) 
+
+summary(g11); plot(g11)      
+summary(g12); plot(g12)      
+summary(g13); plot(g13) 
+summary(g14); plot(g14) 
+
+
 ##############   optimize smoothing parameter for best GAM model  ##############
 sp <- gam9$sp
 tuning.scale <- c(1e-5,1e-4,1e-3,1e-2,1e-1,1e0,1e1,1e2,1e3,1e4,1e5)
@@ -312,17 +344,17 @@ drmna <- d[which(!is.na(d$temp)),]
 dlast5 <- drmna[which(drmna$year==2010 | drmna$year==2011 | drmna$year==2012 | drmna$year==2013 | drmna$year==2014),]
 
 par(mfrow=c(5,6), mex=0.5)
-x <- xvalid(gam1, drmna, kfold=5)
+x <- xvalid(gam1, drmna, kfold=5)      # total FPR + FNR = 0.4933012
 x; colMeans(x)     
 
 x <- xvalid(gam9, drmna, kfold=5)       # gam9 outperforms other gam models
-x; colMeans(x)                      # total FPR + FNR = 0.5382341
+x; colMeans(x)                      # total FPR + FNR = 0.4301723
 
 x <- xvalid(gamopt, drmna, kfold=5)     # smoothing optimizer does not really improve performance
-x; colMeans(x)                      # total FPR + FNR = 0.5480571
+x; colMeans(x)                      # total FPR + FNR = 0.4622951
 
 x <- xvalid(gam9, dlast5, kfold=5)  # using older data does not seem to reduce performance
-x; colMeans(x)                        # total FPR + FNR = 0.5286315
+x; colMeans(x)                        # total FPR + FNR = 0.4850022
 
 # mixed effects model - year as random effect
 out2 <- glmer(pres ~ depbins + latbins + mon + lun4 + tempbins + (1|year),  family="binomial", data=d, control=glmerControl(optimizer="bobyqa"))
@@ -330,7 +362,7 @@ out2 <- glm(pres ~ depbins + latbins + mon + lun4 + tempbins + year,  family="bi
 summary(out2)                  
 extractAIC(out2)
 
-x <- xvalid(out2, drmna, kfold=5)
+x <- xvalid(out2, drmna, kfold=5)    # total FPR + FNR = 0.5201849
 colMeans(x, na.rm=T)                # GAM outperforms GLM
 
 ################################################################################
