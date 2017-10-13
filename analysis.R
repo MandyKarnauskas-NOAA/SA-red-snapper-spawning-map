@@ -121,7 +121,14 @@ plot(g)                                 # little trend of size with depth for ma
 plot(datf$Latitude, datf$TL)
 g <- gam(TL ~ s(Latitude), data=datf)
 summary(g)
-plot(g)                                # trend more important with latitude
+plot(g)                                # trend more important with latitude       
+
+par(mfrow=c(5,1), mex=0.75, mar=c(5,5,2,0))                                     # look at distribution of positive eggs
+for (i in unique(d$year)[7:11])  {                           
+   hist(dat$TL[which(dat$Year==i)], breaks=seq(100,1000,50), main=paste(i), xlab="fish length", ylim=c(0,180))
+#  abline(v=median(dat$TL[which(dat$Year==i)]), col=2)
+   #hist(dat$TL[which(dat$Year==i & dat$fem=="SF")], breaks=seq(100,1000,50), main=paste(i), xlab="fish length")   
+      }
 
 #################  merge maturity categories with site database  ###############
 
@@ -153,12 +160,41 @@ d$SF[which(is.na(d$SF))] <- 0
 d$eggs[which(is.na(d$eggs))] <- 0
   
 map('usa', xlim=c(-82, -75), ylim=c(26, 36))                                            
-points(d$lon, d$lat, cex=(d$abundance+1)/3)                                         # view locations of mature females
-points(d$lon, d$lat, cex=d$eggs/300000, col=3) 
+points(d$lon, d$lat, cex=(d$abundance+1)/3)                                     # view locations of mature females
+points(d$lon, d$lat, cex=log(d$eggs)-9, col=3) 
 
 tapply(d$M, d$year, sum)
 tapply(d$NF, d$year, sum)
 tapply(d$SF, d$year, sum, na.rm=T)
+
+map('usa', xlim=c(-82, -75), ylim=c(26, 36))                                                                           # view locations of mature females
+points(d$lon, d$lat, cex=log(d$eggs)-9, col=d$year-2004)
+
+par(mfrow=c(5,2), mex=0.75, mar=c(5,5,2,0))                                     # look at distribution of positive eggs
+for (i in unique(d$year)[7:11])  {                           
+   hist(log(d$eggs[which(d$year==i & d$lat < 34)]), breaks=seq(10,16, 0.5), main=paste(i, "- South of 34N"), xlab="log total egg production by site") 
+   hist(log(d$eggs[which(d$year==i & d$lat >=34)]), breaks=seq(10,16, 0.5), main=paste(i, "- North of 34N"), xlab="log total egg production by site")   }
+   
+par(mfrow=c(5,1), mex=0.75, mar=c(5,5,2,0))                                     # look at distribution of positive eggs
+for (i in unique(d$year)[7:11])  {    
+  f <- d$eggs[which(d$year==i)];  f <- f[f>0]                       
+   hist(log(f), breaks=seq(10,16, 0.5), main=paste(i), xlab="log total egg production by site")
+   abline(h=median(f))   }
+   
+for (i in unique(d$year)[8:11])  {    
+  f <- d$eggs[which(d$year==i)];  f <- f[f>0]                       
+   plot(ecdf(log(f)), col=i-2009, add=T)    }   
+
+a1 <- hist(log(d$eggs[which(d$year==2009)]), breaks=seq(10,16, 0.5)) 
+a2 <- hist(log(d$eggs[which(d$year==2010)]), breaks=seq(10,16, 0.5)) 
+a3 <- hist(log(d$eggs[which(d$year==2011)]), breaks=seq(10,16, 0.5)) 
+a4 <- hist(log(d$eggs[which(d$year==2012)]), breaks=seq(10,16, 0.5)) 
+a5 <- hist(log(d$eggs[which(d$year==2013)]), breaks=seq(10,16, 0.5)) 
+a6 <- hist(log(d$eggs[which(d$year==2014)]), breaks=seq(10,16, 0.5)) 
+
+barplot(rbind(a2$counts, a3$counts, a4$counts, a5$counts, a6$counts), beside=T, 
+  names.arg=seq(10,15.5,0.5), legend =c(2010:2014), col=1:5)
+
 
 ###############  extract lunar phase data using lunar package  #################
 d$lunim <- lunar.illumination(as.Date(paste(d$year, "-", d$mon, "-", d$day, sep="")))   # lunar illumination
