@@ -88,9 +88,10 @@ points(samp$X, samp$Y, col=5, pch=19, cex=0.1)
 ####################   add depths to prediction grid   #########################
 for (i in 1:nrow(samp)) {  samp$dep[i] <- -z[which.min(abs(x - samp$X[i])), which.min(abs(y - samp$Y[i]))] }
 head(samp)
-samp$lat <- samp$Y
 cols <- rainbow(104)
 plot(samp$X, samp$Y, col=cols[samp$dep], pch=15, cex=0.5)                       # check assignment of depths
+
+save(samp, file="SApredictionGrid.RData")                                            # save prediction grid
 
 #################   EXTRAPOLATE MODEL PREDICTIONS TO NEW GRID   ################
 gamPAfin
@@ -100,7 +101,8 @@ gamNfin
 samp$doy <- mean(d$doy)                                                         # add other factors to prediction grid
 samp$lunar <- mean(d$lunar)                                                     
 samp$temp <- mean(d$temp, na.rm=T)
-samp$year <- 2009
+samp$year <- 2009           
+samp$lat <- samp$Y
 
 ######################################  functions   #############################################
 comb.var   <- function(A, Ase, P, Pse, p) { (P^2 * Ase^2 + A^2 * Pse^2 + 2 * p * A * P * Ase * Pse)  }   # combined variance function
@@ -110,23 +112,40 @@ lnorm.se   <- function(x1, x1e) {  ((exp(x1e^2)-1)*exp(2 * x1 + x1e^2))^0.5  }
 
 predmat <- c()
 predsemat <- c()
-#for (i in seq(min(d$lunar), max(d$lunar), length.out=4))  { 
-   for (j in seq(min(d$temp, na.rm=T), max(d$temp, na.rm=T), length.out=6))  {
+for (i in seq(min(d$lunar), max(d$lunar), length.out=4))  {
+   for (j in seq(min(d$temp, na.rm=T), max(d$temp, na.rm=T), length.out=10))  {
       for (k in unique(d$year)[2:11])  {
-#        samp$doy <- i                                                          # add other factors to prediction grid                                                   
+        samp$lunar <- i                                                          # add other factors to prediction grid
         samp$temp <- j
-        samp$year <- k    
-        
-        predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)           # predict occurrences 
-        predposlog <- predict(gamNfin, samp, type="response", se.fit=T)           # predict eggs when present   
+        samp$year <- k
+
+        predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)           # predict occurrences
+        predposlog <- predict(gamNfin, samp, type="response", se.fit=T)           # predict eggs when present
         predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)                # convert lognormal mean and SE to normal space
         predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
-        co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))           # calculate covariance 
+        co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))           # calculate covariance
         predse <- (comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co))^0.5    # calculate combined variance
         predind <-  predlogit$fit * predpos                                       # calculate combined index
-
+    cat(i)
     predmat   <- cbind(predmat, predind)
-    predsemat <- cbind(predsemat, predse)   } } # }
+    predsemat <- cbind(predsemat, predse)   } } }
+    
+tab <- cor(predmat)
+min(cor(predmat))
+min(cor(round(predmat/100)))
+min(cor(round(predmat/10000)))
+which.min(tab)
+min(tab)
+tab[3,400]
+cor(predmat[,3], predmat[,400])
+plot(predmat[,3], predmat[,400])
+
+par(mfrow=c(1,2))
+plotSAmap(round(predmat[,3]/800), samp$X, samp$lat, pchnum=15, cexnum=0.5)
+plotSAmap(round(predmat[,400]/200000), samp$X, samp$lat, pchnum=15, cexnum=0.5)
+cor(round(predmat[,3]/800), round(predmat[,400]/200000))
+plot(round(predmat[,3]/800), round(predmat[,400]/200000))
+      
       
 mp <- rowMeans(predmat)
 mv <- rowMeans(predsemat)        
