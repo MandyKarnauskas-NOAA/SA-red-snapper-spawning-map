@@ -119,11 +119,11 @@ predsemat <- c()
         
         predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)           # predict occurrences 
         predposlog <- predict(gamNfin, samp, type="response", se.fit=T)           # predict eggs when present   
-        predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)              # convert lognormal mean and SE to normal space
+        predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)                # convert lognormal mean and SE to normal space
         predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
-        co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))                 # calculate covariance 
+        co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))           # calculate covariance 
         predse <- (comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co))^0.5    # calculate combined variance
-        predind <-  predlogit$fit * predpos                                             # calculate combined index
+        predind <-  predlogit$fit * predpos                                       # calculate combined index
 
     predmat   <- cbind(predmat, predind)
     predsemat <- cbind(predsemat, predse)   } } # }
@@ -142,31 +142,10 @@ samp$lunar <- mean(d$lunar)
 samp$temp <- mean(d$temp, na.rm=T)
 samp$year <- 2010
 
-p08 <- predict(g08, samp, type="response", se.fit=T)
-p10 <- predict(g10, samp, type="response", se.fit=T)
-p11 <- predict(g11, samp, type="response", se.fit=T)
-p12 <- predict(g12, samp, type="response", se.fit=T)
-p13 <- predict(g13, samp, type="response", se.fit=T)
-p14 <- predict(g14, samp, type="response", se.fit=T)
-
-par(mfrow=c(2,3), mex=0.6)
-plotSAmap(p08$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
-mtext(side=3, "2008")
-plotSAmap(p10$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
-mtext(side=3, "2010")
-plotSAmap(p11$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
-mtext(side=3, "2011")
-plotSAmap(p12$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
-mtext(side=3, "2012")
-plotSAmap(p13$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
-mtext(side=3, "2013")
-plotSAmap(p14$fit, samp$X, samp$Y, pchnum=15, cexnum=0.5)
-mtext(side=3, "2014")
-
 ##########################   predict on new grid   #############################
-predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)           # predict occurrences 
-predposlog <- predict(gamNfin, samp, type="response", se.fit=T)           # predict eggs when present   
-predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)              # convert lognormal mean and SE to normal space
+predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)                 # predict occurrences 
+predposlog <- predict(gamNfin, samp, type="response", se.fit=T)                 # predict eggs when present   
+predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)                      # convert lognormal mean and SE to normal space
 predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
 co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))                 # calculate covariance 
 predse <- (comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co))^0.5    # calculate combined variance
@@ -175,8 +154,8 @@ predind <-  predlogit$fit * predpos                                             
 samp$se <- predse
 samp$N <-  predind   
 par(mfrow=c(2,2))                                             
-hist(pred$fit)
-hist(pred$se.fit)
+hist(predind)
+hist(predse)
 
 plot(samp$N, mp)
 cor(samp$N, mp)
@@ -208,8 +187,14 @@ par(mfrow=c(3,4), mex=0.6)
     cols <- rainbow(100, start=0.01, end=0.7)[100:1]
     
 for (i in seq(min(d$doy), max(d$doy), length.out=12))  {
-  samp$doy <- i                                                                   # loop through days of year
-  predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)      
+  samp$doy <- i                                                                 # loop through days of year
+predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)                 # predict occurrences 
+predposlog <- predict(gamNfin, samp, type="response", se.fit=T)                 # predict eggs when present   
+predpos   <- lnorm.mean(predposlog$fit, predposlog$se.fit)                      # convert lognormal mean and SE to normal space
+predposse <- lnorm.se(predposlog$fit, predposlog$se.fit)
+co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))                 # calculate covariance 
+predse <- (comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co))^0.5    # calculate combined variance
+predind <-  predlogit$fit * predpos                                             # calculate combined index
 
   map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); 
   mtext(side=3, paste("RS spawning activity\nday", round(mean(samp$doy*365)), "of year"), cex=0.8)
