@@ -46,8 +46,8 @@ plot(ref$doy, ref$temp)
     
 preddoy <- data.frame()
 
-for (i in seq(min(d$doy), max(d$doy), 6/365))  {
-        doy <- i
+for (i in seq(min(d$doy), max(d$doy), 6/365))  {      ########  NOTE!!!!   #####   revisit this later.
+        doy <- i                                      # inclusion of temp prediction based on doy causes bimodal peak in spawning season
         samp$doy <- i
         samp$lunar <- mean(d$lunar)                                             # use average lunar phase
         samp$year  <- 2014                                                      # use most recent year
@@ -245,8 +245,8 @@ matplot(tapply(matfin$V5, list(matfin$V7, matfin$V6), sum), type="l")
 f <- which(matfin$V6==2004 & matfin$V7 == "02" & matfin$V8 == "23"); length(f)
 plotSAmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
 
-f <- which(matfin$V6==2003 & matfin$V7 == 6 & matfin$V8 == 24); length(f)
-plotonmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
+f <- which(matfin$V6==2004 & matfin$V7 == "05" & matfin$V8 == "24"); length(f)
+plotSAmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
 
 ##################################   END    ####################################
 
