@@ -15,6 +15,11 @@ if (!"sp" %in% installed.packages()) install.packages("sp", repos='http://cran.u
 library(sp)
 if (!"splancs" %in% installed.packages()) install.packages("splancs", repos='http://cran.us.r-project.org')
 library(splancs)
+if (!"mgcv" %in% installed.packages()) install.packages("mgcv", repos='http://cran.us.r-project.org')
+library(mgcv)
+if (!"maps" %in% installed.packages()) install.packages("maps", repos='http://cran.us.r-project.org')
+library(maps)
+
 source("plotSAmap.r")                                                           # plotting code
 
 #####################  import data  ############################################
@@ -51,7 +56,7 @@ for (i in seq(min(d$doy), max(d$doy), 6/365))  {      ########  NOTE!!!!   #####
         samp$doy <- i
         samp$lunar <- mean(d$lunar)                                             # use average lunar phase
         samp$year  <- 2014                                                      # use most recent year
-        samp$temp  <- predict(g, data.frame(doy))                               # temp correlated with day of year;
+        samp$temp  <- mean(d$temp, na.rm=T)   # predict(g, data.frame(doy))              # temp correlated with day of year;
 
         predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)         # predict occurrences
         predposlog <- predict(gamNfin, samp, type="response", se.fit=T)         # predict eggs when present
@@ -180,8 +185,8 @@ plotSAmap(rel$spawndep, rel$lon, rel$lat, 15, 0.6)      # check on map
 
 ######################## convert temporal information ##########################
 
-rel$mon <- format(strptime(rel$doy*365, format="%j"), format="%m")
-rel$day <- format(strptime(rel$doy*365, format="%j"), format="%d")
+rel$mon <- as.numeric(format(strptime(rel$doy*365, format="%j"), format="%m"))
+rel$day <- as.numeric(format(strptime(rel$doy*365, format="%j"), format="%d"))
 
 lis <- 2004:2010             # loop over years in matrix below
 
@@ -229,11 +234,22 @@ sum(mat$V5)
 
 write.table(mat, file="RS_ATL_releaseOct25.txt", sep="\t", col.names=F, row.names=F)          # WRITE FILE TO TXT
 
+matN <- mat[which(mat$V3 > 34),]
+matS <- mat[which(mat$V3 < 34),]
+
+write.table(matN, file="RS_ATL_releaseHatteras.txt", sep="\t", col.names=F, row.names=F)          # WRITE FILE TO TXT
+write.table(matS, file="RS_ATL_releaseS.txt", sep="\t", col.names=F, row.names=F)  
+
+#  break down by year, then above and below 34N
+#  >34N run thru global HYCOM
+#  <34N run thru SABGOM
+
+
 ####################     end construction of release file    ###################
 
 ################    double check that matrix came out ok     ###################
 
-matfin <- mat
+matfin <- matS
 table(matfin$V6, matfin$V7)       # numbers in columns should be same
 table(matfin$V6)
 matplot(table(matfin$V7, matfin$V6), type="l")
@@ -242,10 +258,10 @@ diff(table(matfin$V6))
 tapply(matfin$V5, list(matfin$V6, matfin$V7), sum)
 matplot(tapply(matfin$V5, list(matfin$V7, matfin$V6), sum), type="l")
 
-f <- which(matfin$V6==2004 & matfin$V7 == "02" & matfin$V8 == "23"); length(f)
+f <- which(matfin$V6==2004 & matfin$V7 == 2 & matfin$V8 == 23); length(f)
 plotSAmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
 
-f <- which(matfin$V6==2004 & matfin$V7 == "05" & matfin$V8 == "24"); length(f)
+f <- which(matfin$V6==2004 & matfin$V7 == 05 & matfin$V8 == 24); length(f)
 plotSAmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
 
 ##################################   END    ####################################
