@@ -7,6 +7,7 @@
 #
 ################################################################################
 rm(list=ls())
+setwd("C:/Users/mkarnauskas/Desktop/RSmap_SA")
 
 #######################   libraries and functions   ############################
 if (!"ncdf4" %in% installed.packages()) install.packages("ncdf4", repos='http://cran.us.r-project.org')
@@ -71,20 +72,32 @@ for (i in seq(min(d$doy), max(d$doy), 6/365))  {      ########  NOTE!!!!   #####
 nrow(tempmat) * length(seq(min(d$doy), max(d$doy), 6/365))
 dim(preddoy)
 
+par(mfrow=c(1,2))
+plotSAmap(tempmat$predind/1000, tempmat$lon, tempmat$lat, cexnum=0.6, pchnum=15)
+plotSAmap(predlogit$fit*10, tempmat$lon, tempmat$lat, cexnum=0.6, pchnum=15)
+
 dat <- data.frame(cbind(as.numeric(preddoy$lon), as.numeric(preddoy$lat), as.numeric(preddoy$predind), as.numeric(preddoy$doy)))
 names(dat) <- c("lon", "lat", "N", "doy")
 
+windows()
+par(mfrow=c(3,5), mex=0.5)
+for (i in unique(dat$doy)[1:15]) {
+f <- dat[which(dat$doy==i),]
+plotSAmap(f$N/1000, f$lon, f$lat, cexnum=0.6, pchnum=15)
+mtext(side=3, line=0.5, paste("day of year", round(i*365))) }
+
 ##########################  assign polygon labels  #############################
 
-co <- read.table("C:/Users/mkarnauskas/Desktop/RS_FATEproject/CMSfiles/redSnapperSett_GOM_ATL.xyz", header=F)                    # edited version to align with state boundaries
+co <- read.table("C:/Users/mkarnauskas/Desktop/RS_FATEproject/MASTER_codes/CMS_input_files/redSnapperSett_GOM_ATL.xyz", header=F)                    # edited version to align with state boundaries
 
 ################################################################################
 
 ################  plot original recruitment habitat grid cells  ################
-plot(1, xlim=c(-85,-75), ylim=c(24,36))
+windows()
+plot(1, xlim=c(-100,-75), ylim=c(24,36))
 for (j in unique(co[,3]))  {
   m <- co[which(co[,3]==j),]; polygon(m, col=j)
-  text(m[1,1], m[1,2], m[1,3], cex=0.6)      }
+  text(mean(m[,1]), mean(m[,2]), m[1,3], cex=0.6)      }
 
 points(dat$lon, dat$lat, pch=19, cex=0.25)             # release locations
 
@@ -123,36 +136,42 @@ summary(is.na(rel$polynams))
 plot(1, xlim=c(-85,-75), ylim=c(24,36))
 for (j in unique(co[,3]))  {
   m <- co[which(co[,3]==j),]; polygon(m, lwd=1)
-  text(m[1,1], m[1,2], m[1,3], cex=0.6)         }
+  text(mean(m[,1]), mean(m[,2]), m[1,3], cex=0.6)      }
 map('usa', add=T)
 cols <- rainbow(102)
 points(rel$lon, rel$lat, pch=19, cex=0.5, col=cols[rel$polynams])    #  check
 points(rel$lon, rel$lat, pch=19, cex=0.5, col=rel$polynams)          #  check
 
+#########################     ADD DEPTH      ###################################
 #### adjust depth to make sure spawning releases are not below ocean floor  ####
+###############
+###  !!!! NOTE !!!! 
+###  Important to use nest from simulation to be run to avoid particles being trapped below surface 
+#
+nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/nest_1_20080501000000_HYCOM150.nc")    
+#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/nest_1_20070701000000.nc")          # open netcdf and get temp variable
+#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/Hatteras_issue/CMS_inputs_outputs/nest2AtlSABGOM.nc")
+#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/Hatteras_issue/CMS_inputs_outputs/nest_smallHatteras.nc")
+#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/nest_2_20070701000000.nc")          # open netcdf and get temp variable
 
-nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/nest_2_20070701000000.nc")          # open netcdf and get temp variable
+
 v1 <- nc$var[[1]]
 u <- ncvar_get(nc, v1)
 dim(u)
 v1 <- nc$var[[2]]
 v <- ncvar_get(nc, v1)
-dim(v)
+dim(v)       
 nc_close(nc)
 lon <- nc$var[[1]]$dim[[1]]$vals - 360
 lat <- nc$var[[1]]$dim[[2]]$vals
 dep <- nc$var[[1]]$dim[[3]]$vals
 cur <- sqrt(u^2 + v^2)
-image(lon, lat, cur[,,1])
 
-d <- matrix(NA, 219, 231)
-for (i in 1:219) {
-  for (j in 1:231) {
-     d[i,j] <- dep[max(which(!is.na(u[i,j,])))]  }}
-image(lon, lat, d)
+image(lon, lat, cur[,,1])
+image(lon, lat, cur[,,1], xlim=c(-85, -75), ylim=c(24,31))
 
 rel$depest <- NA
-for (i in 1:nrow(rel)) {  rel$depest[i] <- d[which.min(abs(lon - rel$lon[i])), which.min(abs(lat - rel$lat[i]))] }
+for (i in 1:nrow(rel)) {  rel$depest[i] <- dep[max(which(!is.na(u[which.min(abs(lon - rel$lon[i])), which.min(abs(lat - rel$lat[i])),])))] }
 head(rel)
 
 points(rel$lon, rel$lat, pch=15, col=is.na(rel$depest))
@@ -163,10 +182,14 @@ hist(rel$depest)
 plot(rel$lon, rel$lat, pch=15, col=gray(1-(rel$depest/max(rel$depest+10)+0.04)))
 
 length(which(rel$depest<45))
+length(which(rel$depest<=0))
 length(which(rel$depest>=45))
 
-rel$spawndep <- rel$depest - 2                     # set spawning 2m above ocean floor
-rel$spawndep[which(rel$spawndep > 45)] <- 45       # for deeper th 45m, set at 45m
+points(rel$lon[which(rel$depest<=0)], rel$lat[which(rel$depest<=0)], cex=0.5, pch=19, col=2)
+points(rel$lon[which(rel$depest>45)], rel$lat[which(rel$depest>45)], cex=0.5, pch=19, col=3)
+
+rel$spawndep <- rel$depest - 5                     # set spawning 5m above ocean floor
+rel$spawndep[which(rel$spawndep >= 45)] <- 40       # for deeper than 45m, set at 40m
 
 minspawndep <- 9                                  #  minimum spawning depth set at 15m based on literature
 
@@ -188,7 +211,7 @@ plotSAmap(rel$spawndep, rel$lon, rel$lat, 15, 0.6)      # check on map
 rel$mon <- as.numeric(format(strptime(rel$doy*365, format="%j"), format="%m"))
 rel$day <- as.numeric(format(strptime(rel$doy*365, format="%j"), format="%d"))
 
-lis <- 2004:2010             # loop over years in matrix below
+lis <- 2008:2009               # loop over years in matrix below
 
 ##############  trim release file to cells with sufficient eggs   ##############
 
@@ -232,18 +255,35 @@ dim(mat)/8
 dim(mat)/7
 sum(mat$V5)
 
-write.table(mat, file="RS_ATL_releaseOct25.txt", sep="\t", col.names=F, row.names=F)          # WRITE FILE TO TXT
+write.table(mat, file="C:/Users/mkarnauskas/Desktop/RS_FATEproject/MASTER_codes/RS_ATL_release_HYCOM150.txt", sep="\t", col.names=F, row.names=F)          # WRITE FILE TO TXT
 
 matN <- mat[which(mat$V3 > 34),]
-matS <- mat[which(mat$V3 < 34),]
+matS <- mat[which(mat$V3 <= 34),]
 
-write.table(matN, file="RS_ATL_releaseHatteras.txt", sep="\t", col.names=F, row.names=F)          # WRITE FILE TO TXT
-write.table(matS, file="RS_ATL_releaseS.txt", sep="\t", col.names=F, row.names=F)  
+write.table(matN, file="C:/Users/mkarnauskas/Desktop/RS_FATEproject/MASTER_codes/RS_ATL_releaseHatteras_HYCOM150.txt", sep="\t", col.names=F, row.names=F)          # WRITE FILE TO TXT
+write.table(matS, file="C:/Users/mkarnauskas/Desktop/RS_FATEproject/MASTER_codes/RS_ATL_releaseMain_HYCOM150.txt", sep="\t", col.names=F, row.names=F)  
 
 #  break down by year, then above and below 34N
 #  >34N run thru global HYCOM
 #  <34N run thru SABGOM
 
+rm(list=ls())
+d <- read.table("RS_ATL_releaseHatteras.txt", sep="\t")
+d <- d[which(d$V6==2010 & d$V7 > 2 & d$V7 < 7),]
+d$V6 <- 2017
+d$V4 <- 7
+write.table(d, file="releaseHatteras2017.txt", sep="\t", col.names=F, row.names=F) 
+
+rm(list=ls())
+d <- read.table("RS_ATL_releaseHatteras.txt", sep="\t")
+d <- d[which(d$V6==2010 & d$V7 > 2 & d$V7 < 7),]
+d$V4 <- 7
+write.table(d, file="releaseHatteras2010.txt", sep="\t", col.names=F, row.names=F) 
+
+
+d <- read.table("RS_ATL_releaseS.txt", sep="\t")
+d <- d[which(d$V6==2010),]
+write.table(d, file="RS_ATL_releaseS2010.txt", sep="\t", col.names=F, row.names=F) 
 
 ####################     end construction of release file    ###################
 
@@ -258,13 +298,12 @@ diff(table(matfin$V6))
 tapply(matfin$V5, list(matfin$V6, matfin$V7), sum)
 matplot(tapply(matfin$V5, list(matfin$V7, matfin$V6), sum), type="l")
 
-f <- which(matfin$V6==2004 & matfin$V7 == 2 & matfin$V8 == 23); length(f)
+f <- which(matfin$V6==2010 & matfin$V7 == 2 & matfin$V8 == 23); length(f)
 plotSAmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
 
-f <- which(matfin$V6==2004 & matfin$V7 == 05 & matfin$V8 == 24); length(f)
+f <- which(matfin$V6==2010 & matfin$V7 == 05 & matfin$V8 == 24); length(f)
 plotSAmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
 
 ##################################   END    ####################################
-
 
 

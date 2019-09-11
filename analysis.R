@@ -159,9 +159,11 @@ d$NF[which(is.na(d$NF))] <- 0
 d$SF[which(is.na(d$SF))] <- 0
 d$eggs[which(is.na(d$eggs))] <- 0
   
-map('usa', xlim=c(-82, -75), ylim=c(26, 36))                                            
+par(mfrow=c(1,2))
+map('usa', xlim=c(-82, -75), ylim=c(26, 36)); axis(1); axis(2, las=2); box(); mtext(side=3, line=1, "abundance of mature females")
 points(d$lon, d$lat, cex=(d$abundance+1)/3)                                     # view locations of mature females
-points(d$lon, d$lat, cex=log(d$eggs)-9, col=3) 
+map('usa', xlim=c(-82, -75), ylim=c(26, 36));  axis(1); axis(2, las=2); box(); mtext(side=3, line=1, "log egg production of mature females")   
+points(d$lon, d$lat, cex=(d$eggs/690258), col=1) 
 
 tapply(d$M, d$year, sum)
 tapply(d$NF, d$year, sum)

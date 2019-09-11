@@ -23,6 +23,7 @@ if (!"PBSmapping" %in% installed.packages()) install.packages("PBSmapping", repo
 if (!"sp" %in% installed.packages()) install.packages("sp", repos='http://cran.us.r-project.org')
 if (!"matlab" %in% installed.packages()) install.packages("matlab", repos='http://cran.us.r-project.org')
 if (!"ncdf4" %in% installed.packages()) install.packages("ncdf4", repos='http://cran.us.r-project.org')
+if (!"lunar" %in% installed.packages()) install.packages("lunar", repos='http://cran.us.r-project.org')
 library(lme4)
 library(maps)
 library(AICcmodavg)
@@ -32,6 +33,7 @@ library(PBSmapping)
 library(sp)
 library(matlab)
 library(ncdf4)          
+library(lunar) 
 ################################################################################
 
 #######################   CREATE PREDICTION POLYGON   ##########################
@@ -44,7 +46,7 @@ y <- v1$dim[[2]]$vals
 nc_close(nc)
 
 z[which(z>0)] <- 0
-#image(x,y,z)                                                                    # plot bathymetry
+image(x,y,z)                                                                    # plot bathymetry
 abline(h=min(d$lat)); abline(h=max(d$lat))                                      # check extent with respect to data limits
 
 c15<- contourLines(x,y,z, levels=c(-15))                                        # isobaths for 0, 15, 85m
@@ -73,7 +75,7 @@ UTMPts_pol = convUL(p.utm, km=TRUE)                                             
 names(UTMPts_pol) = c("Easting","Northing")
 
 ########################   CREATE PREDICTION GRID   ############################
-UTMPts_samp <- gridpts(as.matrix(UTMPts_pol), xs=4, ys=4)                       # prediction grid  DEFINE RESOLUTION HERE  (now 4km grid)
+UTMPts_samp <- gridpts(as.matrix(UTMPts_pol), xs=10, ys=10)                       # prediction grid  DEFINE RESOLUTION HERE  (was 4km grid - changed to 10km Sep2019 to match Gulf map resolution)
 UTMPts_samp <- as.data.frame(UTMPts_samp)
 names(UTMPts_samp) <- c("X", "Y")
 attr(UTMPts_samp, "projection") = "UTM"
@@ -102,6 +104,7 @@ samp$doy <- mean(d$doy)                                                         
 samp$lunar <- mean(d$lunar)                                                     
 samp$temp <- mean(d$temp, na.rm=T)
 samp$year <- 2009           
+samp$lon <- samp$X
 samp$lat <- samp$Y
 
 ######################################  functions   #############################################
@@ -126,9 +129,9 @@ for (i in seq(min(d$lunar), max(d$lunar), length.out=4))  {
         co <- as.numeric(cor(predlogit$fit, predpos, method="pearson"))           # calculate covariance
         predse <- (comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co))^0.5    # calculate combined variance
         predind <-  predlogit$fit * predpos                                       # calculate combined index
-    cat(i)
     predmat   <- cbind(predmat, predind)
-    predsemat <- cbind(predsemat, predse)   } } }
+    predsemat <- cbind(predsemat, predse)   } }
+        cat(i, "\n")    }
     
 tab <- cor(predmat)
 min(cor(predmat))
@@ -141,8 +144,8 @@ cor(predmat[,3], predmat[,400])
 plot(predmat[,3], predmat[,400])
 
 par(mfrow=c(1,2))
-plotSAmap(round(predmat[,3]/800), samp$X, samp$lat, pchnum=15, cexnum=0.5)
-plotSAmap(round(predmat[,400]/200000), samp$X, samp$lat, pchnum=15, cexnum=0.5)
+plotSAmap(round(predmat[,3]/800), samp$X, samp$lat, pchnum=15, cexnum=0.8)
+plotSAmap(round(predmat[,400]/200000), samp$X, samp$lat, pchnum=15, cexnum=0.8)
 cor(round(predmat[,3]/800), round(predmat[,400]/200000))
 plot(round(predmat[,3]/800), round(predmat[,400]/200000))
       
@@ -184,19 +187,19 @@ cor(samp$se, mv)
 ################### compare GLMM vs GAMM predictions  ##########################
 par(mfrow=c(1,2))
 
-plotSAmap(samp$N/100000, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+plotSAmap(samp$N/100000, samp$X, samp$Y, pchnum=15, cexnum=0.8)
 text(-76.8, 27.6, "spawning female\nprobability of occurrence")
 
-plotSAmap(mp/100000, samp$X, samp$Y, pchnum=15, cexnum=0.5)
+plotSAmap(mp/100000, samp$X, samp$Y, pchnum=15, cexnum=0.8)
 text(-76.8, 27.6, "spawning female\nprobability of occurrence")
   
 ###################    plot GAMM predictions and SE   ##########################
 par(mfrow=c(1,2))
  
-plotSAmap(mp/100000, samp$X, samp$Y, pchnum=15, cexnum=0.35)
+plotSAmap(mp/100000, samp$X, samp$Y, pchnum=15, cexnum=0.8)
 text(-76.8, 27.6, "total red snapper\negg production")
 
-plotSAmap(mv/100000, samp$X, samp$Y, pchnum=15, cexnum=0.35)
+plotSAmap(mv/100000, samp$X, samp$Y, pchnum=15, cexnum=0.8)
 text(-76.8, 27.6, "model S.E.")
 
 ################  plot spawning activity by day of year  #######################
@@ -223,6 +226,7 @@ predind <-  predlogit$fit * predpos                                             
   text(-77.2, 27.6, "spawning female\nprobability of occurrence")  } 
   
 ################  plot spawning activity by lunar phase  #######################
+windows()
 boxplot(d$lunar ~ d$lun4)
 
 par(mfrow=c(2,2), mex=0.5) 
@@ -347,7 +351,7 @@ names(samp) <- c("lon", "lat", "dep")
 samp$lunar <- mean(d$lunar)                                                     
 
 windows()
-par(mfrow=c(6,6))
+par(mfrow=c(6,6), mex=0.5)
 for (j in 1:length(doy))  {
         predmat <- c()
         predsemat <- c()                                                                                         
