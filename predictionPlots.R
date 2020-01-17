@@ -203,6 +203,7 @@ plotSAmap(mv/100000, samp$X, samp$Y, pchnum=15, cexnum=0.8)
 text(-76.8, 27.6, "model S.E.")
 
 ################  plot spawning activity by day of year  #######################
+windows()
 par(mfrow=c(3,4), mex=0.6) 
 
     yloc <- seq(28, 32, length.out=100)
@@ -240,6 +241,26 @@ for (i in 1:4)  {
   map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); 
   mtext(side=3, paste("RS spawning activity\n", n[i], "Moon"), cex=0.8)
   points(samp$X, samp$Y, col=cols[round(predlogit$fit*300)+1], pch=15, cex=0.5)
+  for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
+  text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)  
+  text(-76.8, 27.6, "spawning female\nprobability of occurrence") } 
+
+
+################  plot spawning activity by year  #######################
+
+windows()
+par(mfrow=c(3,4), mex=0.5) 
+samp$doy <- mean(d$doy)
+yr <- 2004:2014
+
+for (i in 1:11)  {
+  samp$lunar <- 2.75                                    
+  samp$year <- yr[i]           # loop through year
+  predlogit <- predict(gamPAfin, samp, type="response", se.fit=T)    
+  
+  map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); 
+  mtext(side=3, yr[i], cex=0.8)
+  points(samp$lon, samp$lat, col=cols[round(predlogit$fit*250)+1], pch=15, cex=0.75)
   for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
   text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)  
   text(-76.8, 27.6, "spawning female\nprobability of occurrence") } 
@@ -368,3 +389,4 @@ for (j in 1:length(doy))  {
   plotSAmap(mp*10, samp$lon, samp$lat, pchnum=15, cexnum=0.35)
   mtext(side=3, paste("RS spawning activity\nday", round(mean(doy[j]*365)), "of year"), cex=0.8)
     } 
+
