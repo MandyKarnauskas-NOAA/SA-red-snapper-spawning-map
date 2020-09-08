@@ -220,7 +220,7 @@ predse <- (comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co))^0.
 predind <-  predlogit$fit * predpos                                             # calculate combined index
 
   map("state", interior = TRUE, xlim=c(-81.75, -75), ylim=c(26.8, 35.2)); axis(1); axis(2); box(); 
-  mtext(side=3, paste("RS spawning activity\nday", round(mean(samp$doy*365)), "of year"), cex=0.8)
+  mtext(side=3, paste("RS spawning activity\nday", round(mean(samp$doy)), "of year"), cex=0.8)
   points(samp$X, samp$Y, col=cols[round(predlogit$fit*300)+1], pch=15, cex=0.5)
   for (j in 1:100) {   polygon(c(-77, -76.5, -76.5, -77), c(yloc[j], yloc[j], yloc[j+1], yloc[j+1]), col=cols[j], border=NA) }
   text(x=-76.1, y=yloc[seq(0,100,10)]+0.2, seq(0,0.9,0.1), pos=1)
@@ -275,10 +275,9 @@ gam9 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomia
 plot(gam9)
 
 su <- read.table("mandy_rs.csv", sep=",", header=T)        # Sue data
-                                                           # add necessary factors
-su$doy <- NA                                                                    #  for GAM, can use continuous day of year instead of month
-dinmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-for (i in 1:nrow(su))  {  su$doy[i] <- (sum(dinmon[1:su$month[i]]) + su$day[i]) / 365  }
+
+su$Date <- as.Date(as.character(su$date), "%m/%d/%Y")
+su$doy <- as.numeric(strftime(su$Date, format = "%j")) 
 su$lunar <- lunar.phase(as.Date(paste(su$year,"-",su$mon,"-",su$day,sep="")), name=F)  # also can use continuous lunar phase                                   
 out <- gam(temp ~ s(doy), data=d1)
 plot(out)
@@ -319,7 +318,7 @@ par(mgp=c(0,2,0))
 axis(1, at=1:2, lab=c("actively \nspawning (1)", "not actively \nspawning (2)")); box()
 t.test(su$pred ~ su$activespawn)
 wilcox.test(su$pred ~ su$activespawn)
-text(1.5, 0.43, "difference \nbetween means: \nP < 0.001")
+text(1.5, 0.33, "difference \nbetween means: \nP < 0.001")
 
 # Repro phases are: 
 # 1=immature 
@@ -387,6 +386,6 @@ for (j in 1:length(doy))  {
   mp <- rowMeans(predmat)
 #  mv <- rowMeans(predsemat) 
   plotSAmap(mp*10, samp$lon, samp$lat, pchnum=15, cexnum=0.35)
-  mtext(side=3, paste("RS spawning activity\nday", round(mean(doy[j]*365)), "of year"), cex=0.8)
+  mtext(side=3, paste("RS spawning activity\nday", round(mean(doy[j])), "of year"), cex=0.8)
     } 
 

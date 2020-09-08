@@ -13,7 +13,7 @@
 
 rm(list=ls())
 
-setwd("C:/Users/mkarnauskas/Desktop/RSmap_SA")           
+setwd("C:/Users/mandy.karnauskas/Desktop/RSmap_SA")           
 source("Xvalidate.r")                                                           # cross-validation code
 
 ################################  libraries  ###################################
@@ -84,7 +84,8 @@ table(dat$Inc)
 table(dat$Mat, dat$Year)
  
 matcodes <- c(3, 7, "B", "C", "D", "G", "H")                                    # considered "spawning females" -- see Excel tab 2 in data sheet
-dat$fem <- "M"                                                                  # M =  male
+dat$fem <- NA
+dat$fem[which(dat$Sex==1)] <- "M"                                                                  # M =  male
 dat$fem[which(dat$Sex==2)] <- "NF"                                              # NF = non-spawning female
 dat$fem[which(dat$Mat %in% matcodes & dat$Sex==2)] <- "SF"                      # SF = spawning female
 table(dat$fem, useNA="always")
@@ -124,7 +125,7 @@ summary(g)
 plot(g)                                # trend more important with latitude       
 
 par(mfrow=c(5,1), mex=0.75, mar=c(5,5,2,0))                                     # look at distribution of positive eggs
-for (i in unique(d$year)[7:11])  {                           
+for (i in unique(dat$Year)[7:11])  {                           
    hist(dat$TL[which(dat$Year==i)], breaks=seq(100,1000,50), main=paste(i), xlab="fish length", ylim=c(0,180))
 #  abline(v=median(dat$TL[which(dat$Year==i)]), col=2)
    #hist(dat$TL[which(dat$Year==i & dat$fem=="SF")], breaks=seq(100,1000,50), main=paste(i), xlab="fish length")   
@@ -174,25 +175,25 @@ points(d$lon, d$lat, cex=log(d$eggs)-9, col=d$year-2004)
 
 par(mfrow=c(5,2), mex=0.75, mar=c(5,5,2,0))                                     # look at distribution of positive eggs
 for (i in unique(d$year)[7:11])  {                           
-   hist(log(d$eggs[which(d$year==i & d$lat < 34)]), breaks=seq(10,16, 0.5), main=paste(i, "- South of 34N"), xlab="log total egg production by site") 
-   hist(log(d$eggs[which(d$year==i & d$lat >=34)]), breaks=seq(10,16, 0.5), main=paste(i, "- North of 34N"), xlab="log total egg production by site")   }
+   hist(log(d$eggs[which(d$year==i & d$lat < 34)]), breaks=seq(7, 16, 0.5), main=paste(i, "- South of 34N"), xlab="log total egg production by site") 
+   hist(log(d$eggs[which(d$year==i & d$lat >=34)]), breaks=seq(7, 16, 0.5), main=paste(i, "- North of 34N"), xlab="log total egg production by site")   }
    
 par(mfrow=c(5,1), mex=0.75, mar=c(5,5,2,0))                                     # look at distribution of positive eggs
 for (i in unique(d$year)[7:11])  {    
   f <- d$eggs[which(d$year==i)];  f <- f[f>0]                       
-   hist(log(f), breaks=seq(10,16, 0.5), main=paste(i), xlab="log total egg production by site")
+   hist(log(f), breaks=seq(7, 16, 0.5), main=paste(i), xlab="log total egg production by site")
    abline(h=median(f))   }
    
 for (i in unique(d$year)[8:11])  {    
   f <- d$eggs[which(d$year==i)];  f <- f[f>0]                       
-   plot(ecdf(log(f)), col=i-2009, add=T)    }   
+   plot(ecdf(log(f)), col=i-2009, add=F)    }   
 
-a1 <- hist(log(d$eggs[which(d$year==2009)]), breaks=seq(10,16, 0.5)) 
-a2 <- hist(log(d$eggs[which(d$year==2010)]), breaks=seq(10,16, 0.5)) 
-a3 <- hist(log(d$eggs[which(d$year==2011)]), breaks=seq(10,16, 0.5)) 
-a4 <- hist(log(d$eggs[which(d$year==2012)]), breaks=seq(10,16, 0.5)) 
-a5 <- hist(log(d$eggs[which(d$year==2013)]), breaks=seq(10,16, 0.5)) 
-a6 <- hist(log(d$eggs[which(d$year==2014)]), breaks=seq(10,16, 0.5)) 
+a1 <- hist(log(d$eggs[which(d$year==2009)]), breaks=seq(7, 16, 0.5)) 
+a2 <- hist(log(d$eggs[which(d$year==2010)]), breaks=seq(7, 16, 0.5)) 
+a3 <- hist(log(d$eggs[which(d$year==2011)]), breaks=seq(7, 16, 0.5)) 
+a4 <- hist(log(d$eggs[which(d$year==2012)]), breaks=seq(7, 16, 0.5)) 
+a5 <- hist(log(d$eggs[which(d$year==2013)]), breaks=seq(7, 16, 0.5)) 
+a6 <- hist(log(d$eggs[which(d$year==2014)]), breaks=seq(7, 16, 0.5)) 
 
 barplot(rbind(a2$counts, a3$counts, a4$counts, a5$counts, a6$counts), beside=T, 
   names.arg=seq(10,15.5,0.5), legend =c(2010:2014), col=1:5)
@@ -233,10 +234,9 @@ hist(log(d$eggs))
 
 #############################   GAM MODEL   ####################################
 
-d$doy <- NA                                                                     #  for GAM, can use continuous day of year instead of month
-dinmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-for (i in 1:nrow(d))  {  d$doy[i] <- (sum(dinmon[1:d$mon[i]]) + d$day[i]) / 365  }
-d$lunar <- lunar.phase(as.Date(paste(d$year,"-",d$mon,"-",d$day,sep="")), name=F)  # also can use continuous lunar phase
+d$Date <- as.Date(as.character(d$Date), "%d-%b-%y")
+d$doy <- as.numeric(strftime(d$Date, format = "%j"))                               #  for GAM, can use continuous day of year instead of month
+d$lunar <- lunar.phase(d$Date, name=F)  # also can use continuous lunar phase
 
 #  FACTORS:  year   mon     depbins    tempbins    lunar     angbins           
 #                   doy     dep        temp        lunim     ang
