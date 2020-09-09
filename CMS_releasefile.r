@@ -7,7 +7,7 @@
 #
 ################################################################################
 rm(list=ls())
-setwd("C:/Users/mkarnauskas/Desktop/RSmap_SA")
+setwd("C:/Users/mandy.karnauskas/Desktop/RSmap_SA")
 
 #######################   libraries and functions   ############################
 if (!"ncdf4" %in% installed.packages()) install.packages("ncdf4", repos='http://cran.us.r-project.org')
@@ -52,7 +52,7 @@ plot(ref$doy, ref$temp)
     
 preddoy <- data.frame()
 
-for (i in seq(min(d$doy), max(d$doy), 6/365))  {      ########  NOTE!!!!   #####   revisit this later.
+for (i in seq(min(d$doy), max(d$doy), 6))  {      ########  NOTE!!!!   #####   revisit this later.
         doy <- i                                      # inclusion of temp prediction based on doy causes bimodal peak in spawning season
         samp$doy <- i
         samp$lunar <- mean(d$lunar)                                             # use average lunar phase
@@ -69,26 +69,27 @@ for (i in seq(min(d$doy), max(d$doy), 6/365))  {      ########  NOTE!!!!   #####
     tempmat <- cbind(samp, predind)                                             # temporary save of prediction terms and predictions
     preddoy <- rbind(preddoy, tempmat)                }
 
-nrow(tempmat) * length(seq(min(d$doy), max(d$doy), 6/365))
+nrow(tempmat) * length(seq(min(d$doy), max(d$doy), 6))
 dim(preddoy)
 
 par(mfrow=c(1,2))
 plotSAmap(tempmat$predind/1000, tempmat$lon, tempmat$lat, cexnum=0.6, pchnum=15)
 plotSAmap(predlogit$fit*10, tempmat$lon, tempmat$lat, cexnum=0.6, pchnum=15)
 
-dat <- data.frame(cbind(as.numeric(preddoy$lon), as.numeric(preddoy$lat), as.numeric(preddoy$predind), as.numeric(preddoy$doy)))
-names(dat) <- c("lon", "lat", "N", "doy")
+dat <- data.frame(cbind(as.numeric(preddoy$lon), as.numeric(preddoy$lat), 
+                        as.numeric(preddoy$predind), as.numeric(preddoy$doy), as.numeric(preddoy$ocModDep)))
+names(dat) <- c("lon", "lat", "N", "doy", "depest")
 
 windows()
 par(mfrow=c(3,5), mex=0.5)
 for (i in unique(dat$doy)[1:15]) {
 f <- dat[which(dat$doy==i),]
 plotSAmap(f$N/1000, f$lon, f$lat, cexnum=0.6, pchnum=15)
-mtext(side=3, line=0.5, paste("day of year", round(i*365))) }
+mtext(side=3, line=0.5, paste("day of year", i)) }
 
 ##########################  assign polygon labels  #############################
 
-co <- read.table("C:/Users/mkarnauskas/Desktop/RS_FATEproject/MASTER_codes/CMS_input_files/redSnapperSett_GOM_ATL.xyz", header=F)                    # edited version to align with state boundaries
+co <- read.table("C:/Users/mandy.karnauskas/Desktop/RS_FATEproject/MASTER_codes/CMS_input_files/redSnapperSett_GOM_ATL_hires.xyz", header=F)                    # edited version to align with state boundaries
 
 ################################################################################
 
@@ -138,40 +139,11 @@ for (j in unique(co[,3]))  {
   m <- co[which(co[,3]==j),]; polygon(m, lwd=1)
   text(mean(m[,1]), mean(m[,2]), m[1,3], cex=0.6)      }
 map('usa', add=T)
-cols <- rainbow(102)
+cols <- rainbow(117)
 points(rel$lon, rel$lat, pch=19, cex=0.5, col=cols[rel$polynams])    #  check
 points(rel$lon, rel$lat, pch=19, cex=0.5, col=rel$polynams)          #  check
 
-#########################     ADD DEPTH      ###################################
-#### adjust depth to make sure spawning releases are not below ocean floor  ####
-###############
-###  !!!! NOTE !!!! 
-###  Important to use nest from simulation to be run to avoid particles being trapped below surface 
-#
-nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/nest_1_20080501000000_HYCOM150.nc")    
-#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/nest_1_20070701000000.nc")          # open netcdf and get temp variable
-#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/Hatteras_issue/CMS_inputs_outputs/nest2AtlSABGOM.nc")
-#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/Hatteras_issue/CMS_inputs_outputs/nest_smallHatteras.nc")
-#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/nest_2_20070701000000.nc")          # open netcdf and get temp variable
-
-
-v1 <- nc$var[[1]]
-u <- ncvar_get(nc, v1)
-dim(u)
-v1 <- nc$var[[2]]
-v <- ncvar_get(nc, v1)
-dim(v)       
-nc_close(nc)
-lon <- nc$var[[1]]$dim[[1]]$vals - 360
-lat <- nc$var[[1]]$dim[[2]]$vals
-dep <- nc$var[[1]]$dim[[3]]$vals
-cur <- sqrt(u^2 + v^2)
-
-image(lon, lat, cur[,,1])
-image(lon, lat, cur[,,1], xlim=c(-85, -75), ylim=c(24,31))
-
-rel$depest <- NA
-for (i in 1:nrow(rel)) {  rel$depest[i] <- dep[max(which(!is.na(u[which.min(abs(lon - rel$lon[i])), which.min(abs(lat - rel$lat[i])),])))] }
+############## adjust depth 
 head(rel)
 
 points(rel$lon, rel$lat, pch=15, col=is.na(rel$depest))
@@ -180,13 +152,14 @@ rel$depest[is.na(rel$depest)] <- 0
 table(rel$depest)
 hist(rel$depest)
 plot(rel$lon, rel$lat, pch=15, col=gray(1-(rel$depest/max(rel$depest+10)+0.04)))
+plotSAmap(rel$depest, rel$lon, rel$lat, cexnum=0.6, pchnum=15)
 
 length(which(rel$depest<45))
 length(which(rel$depest<=0))
 length(which(rel$depest>=45))
 
-points(rel$lon[which(rel$depest<=0)], rel$lat[which(rel$depest<=0)], cex=0.5, pch=19, col=2)
-points(rel$lon[which(rel$depest>45)], rel$lat[which(rel$depest>45)], cex=0.5, pch=19, col=3)
+points(rel$lon[which(rel$depest<=0)], rel$lat[which(rel$depest<=0)], cex=1.5, pch=19, col=2)
+points(rel$lon[which(rel$depest>45)], rel$lat[which(rel$depest>45)], cex=1.5, pch=19, col=3)
 
 rel$spawndep <- rel$depest - 5                     # set spawning 5m above ocean floor
 rel$spawndep[which(rel$spawndep >= 45)] <- 40       # for deeper than 45m, set at 40m
@@ -208,8 +181,8 @@ plotSAmap(rel$spawndep, rel$lon, rel$lat, 15, 0.6)      # check on map
 
 ######################## convert temporal information ##########################
 
-rel$mon <- as.numeric(format(strptime(rel$doy*365, format="%j"), format="%m"))
-rel$day <- as.numeric(format(strptime(rel$doy*365, format="%j"), format="%d"))
+rel$mon <- as.numeric(format(strptime(rel$doy, format="%j"), format="%m"))
+rel$day <- as.numeric(format(strptime(rel$doy, format="%j"), format="%d"))
 
 lis <- 2008:2009               # loop over years in matrix below
 
@@ -220,7 +193,7 @@ head(m)
 
 x <- m$N /20000
 
-m$N <-round(m$N / 20000)
+m$N <-round(m$N / 2000)
 mean(m$N); min(m$N); max(m$N)
 table(m$N==0)
 tapply(x, (m$N == 0), sum)/sum(x)          # what percentage of particles get lost by rounding?
@@ -255,7 +228,7 @@ dim(mat)/8
 dim(mat)/7
 sum(mat$V5)
 
-write.table(mat, file="C:/Users/mkarnauskas/Desktop/RS_FATEproject/MASTER_codes/RS_ATL_release_HYCOM150.txt", sep="\t", col.names=F, row.names=F)          # WRITE FILE TO TXT
+write.table(mat, file="C:/Users/mkarnauskas/Desktop/RS_FATEproject/MASTER_codes/RS_ATL_release.txt", sep="\t", col.names=F, row.names=F)          # WRITE FILE TO TXT
 
 matN <- mat[which(mat$V3 > 34),]
 matS <- mat[which(mat$V3 <= 34),]
@@ -298,10 +271,10 @@ diff(table(matfin$V6))
 tapply(matfin$V5, list(matfin$V6, matfin$V7), sum)
 matplot(tapply(matfin$V5, list(matfin$V7, matfin$V6), sum), type="l")
 
-f <- which(matfin$V6==2010 & matfin$V7 == 2 & matfin$V8 == 23); length(f)
+f <- which(matfin$V6==2008 & matfin$V7 == 4 & matfin$V8 == 22); length(f)
 plotSAmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
 
-f <- which(matfin$V6==2010 & matfin$V7 == 05 & matfin$V8 == 24); length(f)
+f <- which(matfin$V6==2008 & matfin$V7 == 07 & matfin$V8 == 21); length(f)
 plotSAmap(matfin$V5[f], matfin$V2[f], matfin$V3[f], cexnum=0.6, pchnum=15)
 
 ##################################   END    ####################################

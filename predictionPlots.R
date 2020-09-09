@@ -93,6 +93,56 @@ head(samp)
 cols <- rainbow(104)
 plot(samp$X, samp$Y, col=cols[samp$dep], pch=15, cex=0.5)                       # check assignment of depths
 
+###################  add depths from oceanographic models  ######################
+
+###  !!!! NOTE !!!! 
+###  Important to use nest from simulation to be run to avoid particles being trapped below surface 
+#
+nc1 <- nc_open("C:/Users/mandy.karnauskas/Desktop/RS_FATEproject/nest_1_20080501000000_HYCOM150.nc")  # Matthieu model  
+nc2 <- nc_open("C:/Users/mandy.karnauskas/Desktop/RS_FATEproject/nest_2_20070701000000.nc")          # SABGOM model
+#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/Hatteras_issue/CMS_inputs_outputs/nest2AtlSABGOM.nc")
+#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/Hatteras_issue/CMS_inputs_outputs/nest_smallHatteras.nc")
+#nc <- nc_open("C:/Users/mkarnauskas/Desktop/RS_FATEproject/nest_2_20070701000000.nc")          # open netcdf and get temp variable
+
+var1 <- nc1$var[[1]]
+u1 <- ncvar_get(nc1, var1)
+dim(u1)
+var2 <- nc1$var[[2]]
+v1 <- ncvar_get(nc1, var2)
+dim(v1)       
+nc_close(nc1)
+
+var1 <- nc2$var[[1]]
+u2 <- ncvar_get(nc2, var1)
+dim(u2)
+var2 <- nc2$var[[2]]
+v2 <- ncvar_get(nc2, var2)
+dim(v2)       
+nc_close(nc2)
+
+lon1 <- nc1$var[[1]]$dim[[1]]$vals - 360
+lat1 <- nc1$var[[1]]$dim[[2]]$vals
+dep1 <- nc1$var[[1]]$dim[[3]]$vals
+cur1 <- sqrt(u1^2 + v1^2)
+
+lon2 <- nc2$var[[1]]$dim[[1]]$vals - 360
+lat2 <- nc2$var[[1]]$dim[[2]]$vals
+dep2 <- nc2$var[[1]]$dim[[3]]$vals
+cur2 <- sqrt(u2^2 + v2^2)
+
+image(lon1, lat1, cur1[,,1])
+image(lon2, lat2, cur2[,,1]) #, xlim=c(-85, -75), ylim=c(24,31))
+
+samp$ocModDep <- NA
+for (i in 1:nrow(samp)) {  
+  depth1 <- dep1[max(which(!is.na(u1[which.min(abs(lon1 - samp$X[i])), which.min(abs(lat1 - samp$Y[i])),])))]
+  depth2 <- dep2[max(which(!is.na(u2[which.min(abs(lon2 - samp$X[i])), which.min(abs(lat2 - samp$Y[i])),])))]  
+  samp$ocModDep[i] <- min(depth1, depth2)
+}
+
+samp[is.na(samp$ocModDep),]
+points(samp$X[is.na(samp$ocModDep)], samp$Y[is.na(samp$ocModDep)])
+
 save(samp, file="SApredictionGrid.RData")                                            # save prediction grid
 
 #################   EXTRAPOLATE MODEL PREDICTIONS TO NEW GRID   ################
@@ -371,7 +421,7 @@ names(samp) <- c("lon", "lat", "dep")
 samp$lunar <- mean(d$lunar)                                                     
 
 windows()
-par(mfrow=c(6,6), mex=0.5)
+par(mfrow=c(4, 8), mex=0.5)
 for (j in 1:length(doy))  {
         predmat <- c()
         predsemat <- c()                                                                                         

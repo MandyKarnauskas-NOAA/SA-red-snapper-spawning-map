@@ -58,10 +58,16 @@ p <- p[which(!is.na(p$Latitude)),]                                              
 table((p$StationDepth <= 140))                                                  # use only stations in <140m depth (limit for RS)
 p <- p[which(p$StationDepth <= 140),]
 
-d1 <- as.data.frame(table(dat$PCG))
-d2 <- merge(p, d1, by.x="PCG", by.y="Var1")
+d1 <- as.data.frame(table(dat$PCG, useNA = "always"))
+d1$Var1 <- as.character(d1$Var1)
+p$PCG <- as.character(p$PCG)
+d2 <- merge(p, d1, by.x="PCG", by.y ="Var1", all.y = TRUE)
+dim(p)
+dim(d1)
+dim(d2)
 summary(d2$Abundance==d2$Freq)                                                  # ensure reference site file matches up with data file
 d2[which(d2$Abundance!=d2$Freq),]                                               # two sites are off by N of 1; recheck when updated data are available.
+head(d2)
 
 length(unique(dat$PCG))                                                         # getting to know data
 length(unique(dat$Latitude))
@@ -136,8 +142,11 @@ for (i in unique(dat$Year)[7:11])  {
 dat$BF <- 3.012*10^(-8) * dat$TL^4.775    #  with TL in mm - from K. Shertzer email - used in last SEDAR
 dat$BF[which(dat$fem !="SF")] <- 0
 
+plot(dat$TL, dat$BF, col = as.numeric(as.factor(dat$fem)))
+
 tab <- as.data.frame.matrix(table(dat$PCG, dat$fem))
 tab$PCG <- rownames(tab)
+table(names(tapply(dat$BF, dat$PCG, sum)) == tab$PCG)  
 tab$eggs <- tapply(dat$BF, dat$PCG, sum)
 
 dim(p)
@@ -196,7 +205,7 @@ a5 <- hist(log(d$eggs[which(d$year==2013)]), breaks=seq(7, 16, 0.5))
 a6 <- hist(log(d$eggs[which(d$year==2014)]), breaks=seq(7, 16, 0.5)) 
 
 barplot(rbind(a2$counts, a3$counts, a4$counts, a5$counts, a6$counts), beside=T, 
-  names.arg=seq(10,15.5,0.5), legend =c(2010:2014), col=1:5)
+  names.arg=seq(7, 15.5, 0.5), legend =c(2010:2014), col=1:5)
 
 
 ###############  extract lunar phase data using lunar package  #################
@@ -228,15 +237,17 @@ d$pres <- d$eggs                                                                
 d$pres[which(d$pres>1)] <- 1
 d$eggs[which(d$eggs==0)] <- NA
 #d$SF
+table(d$eggs, d$pres)
 
 hist(d$eggs)
 hist(log(d$eggs))
 
 #############################   GAM MODEL   ####################################
 
-d$Date <- as.Date(as.character(d$Date), "%d-%b-%y")
-d$doy <- as.numeric(strftime(d$Date, format = "%j"))                               #  for GAM, can use continuous day of year instead of month
-d$lunar <- lunar.phase(d$Date, name=F)  # also can use continuous lunar phase
+d$date <- as.Date(as.character(d$Date), "%d-%b-%y")
+d$doy <- as.numeric(strftime(d$date, format = "%j"))                               #  for GAM, can use continuous day of year instead of month
+d$lunar <- lunar.phase(d$date, name=F)  # also can use continuous lunar phase
+plot(d$date, d$doy)
 
 #  FACTORS:  year   mon     depbins    tempbins    lunar     angbins           
 #                   doy     dep        temp        lunim     ang
@@ -309,7 +320,7 @@ extractAIC(gam5)
 extractAIC(gam6)
 extractAIC(gam7)
 extractAIC(gam8)
-extractAIC(gam9)                                                                #  gam9 is best model by AIC and deviance explained 
+extractAIC(gam9)                  #  gam9 is best model by AIC and deviance explained 
 extractAIC(gam10)
 extractAIC(gam11)
 
@@ -339,7 +350,6 @@ g04 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial
 g08 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d08, method="REML")
 g09 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d09, method="REML")
 g10 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d10, method="REML")
-
 g11 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d12, method="REML")
 g12 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d12, method="REML")
 g13 <- gam(pres ~ s(dep) + s(lat) + s(doy) + s(lunar) + s(temp), family=binomial, data=d13, method="REML")
@@ -575,12 +585,14 @@ predvar <- comb.var(predpos, predposse, predlogit$fit, predlogit$se.fit, co)    
 predind <-  predlogit$fit * predpos                                             # estimated abundance is prob. of occurrence * estimated abundance when present
 
 plot(dd$eggs, predpos)
+qqplot(log(dd$eggs), log(predpos))
 
 dd$eggs[which(is.na(dd$eggs))] <- 0
 
-plot(predind, dd$eggs)
+plot(predind, dd$eggs, pch = 19, col ="#FF000030")
 cor(predind, dd$eggs)
 qqplot(predind, dd$eggs)
+qqplot(dd$eggs, predind)
 
 dd$eggs[which.max(dd$eggs)] <- NA
 
